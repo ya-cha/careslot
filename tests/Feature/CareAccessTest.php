@@ -80,7 +80,7 @@ it('renders only the child authorized by the token and prevents choosing another
     $other = Child::factory()->create(['first_name' => 'FremdesKindGeheim']);
 
     $this->get(route('parent.show', $plain))->assertOk()->assertSee($response->child->first_name)->assertDontSee('FremdesKindGeheim')->assertHeader('Referrer-Policy', 'no-referrer');
-    $this->post(route('parent.update', $plain), ['child_id' => $other->id, 'waiting_needed' => true, 'volunteer' => true])->assertRedirect(route('parent.show', $plain));
+    $this->post(route('parent.update', $plain), ['child_id' => $other->id, 'waiting_needed' => true])->assertRedirect(route('parent.show', $plain));
 
     expect($response->fresh()->waiting_needed)->toBeTrue();
     $this->assertDatabaseMissing('emergency_responses', ['child_id' => $other->id]);
@@ -89,15 +89,14 @@ it('renders only the child authorized by the token and prevents choosing another
 it('allows changing responses while open and validates regular demand', function () {
     [$plain, $response] = parentAccess(true);
     $url = route('parent.update', $plain);
-    $this->post($url, ['waiting_needed' => false, 'volunteer' => false])->assertSessionHasErrors(['regular_needed' => 'Bitte den Bedarf am regulären Platz angeben.']);
-    $this->post($url, ['regular_needed' => '0', 'waiting_needed' => true, 'volunteer' => false])->assertRedirect();
+    $this->post($url, ['waiting_needed' => false])->assertSessionHasErrors(['regular_needed' => 'Bitte den Bedarf am regulären Platz angeben.']);
+    $this->post($url, ['regular_needed' => '0', 'waiting_needed' => true])->assertRedirect();
     expect($response->fresh()->regular_needed)->toBeFalse();
     expect($response->fresh()->waiting_needed)->toBeFalse();
 
-    $this->post($url, ['regular_needed' => '1', 'waiting_needed' => false, 'volunteer' => true])->assertRedirect();
+    $this->post($url, ['regular_needed' => '1', 'waiting_needed' => false])->assertRedirect();
 
     expect($response->fresh()->regular_needed)->toBeTrue();
-    expect($response->fresh()->volunteer)->toBeTrue();
 });
 
 it('refuses unknown revoked expired and malformed tokens', function (string $state) {
@@ -118,7 +117,7 @@ it('refuses unknown revoked expired and malformed tokens', function (string $sta
     }
 
     $this->get(route('parent.show', $plain))->assertNotFound();
-    $this->post(route('parent.update', $plain), ['waiting_needed' => true, 'volunteer' => true])->assertNotFound();
+    $this->post(route('parent.update', $plain), ['waiting_needed' => true])->assertNotFound();
     expect($response->fresh()->responded_at)->toBeNull();
 })->with(['revoked', 'expired', 'unknown', 'malformed']);
 
@@ -127,7 +126,7 @@ it('blocks parent edits at the deadline and after manual closure', function (str
     [$plain, $response] = parentAccess();
     $response->allocation->update($state === 'deadline' ? ['response_deadline' => now()] : ['status' => 'closed']);
 
-    $this->post(route('parent.update', $plain), ['waiting_needed' => true, 'volunteer' => true])->assertSessionHasErrors(['response' => 'Die Rückmeldungsphase ist geschlossen.']);
+    $this->post(route('parent.update', $plain), ['waiting_needed' => true])->assertSessionHasErrors(['response' => 'Die Rückmeldungsphase ist geschlossen.']);
 
     expect($response->fresh()->responded_at)->toBeNull();
 })->with(['deadline', 'closed']);
@@ -241,9 +240,8 @@ it('creates optional fictional demo data without mail or administrator accounts'
     $this->assertDatabaseCount('emergency_days', 2);
     $this->assertDatabaseHas('emergency_allocations', ['status' => 'responses']);
     $this->assertDatabaseHas('emergency_allocations', ['status' => 'proposed']);
-    $this->assertDatabaseCount('lottery_draws', 1);
     $proposal = EmergencyAllocation::where('status', 'proposed')->firstOrFail()->proposal;
-    expect(collect($proposal['rows'])->pluck('phase')->filter()->countBy()->sortKeys()->all())->toBe([1 => 1, 2 => 1, 3 => 2]);
+    expect(collect($proposal['rows'])->pluck('phase')->filter()->countBy()->sortKeys()->all())->toBe([1 => 1, 2 => 1]);
     $this->assertDatabaseCount('allocation_results', 0);
     $this->assertDatabaseCount('waiting_list_movements', 0);
     $this->assertDatabaseCount('users', 0);

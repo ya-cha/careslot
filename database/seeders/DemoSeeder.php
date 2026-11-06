@@ -66,7 +66,7 @@ class DemoSeeder extends Seeder
             if ($index === 0) {
                 continue;
             }
-            $response->update(['regular_needed' => $index === 1 ? false : null, 'waiting_needed' => $index === 2, 'volunteer' => $index >= 3, 'responded_at' => now()]);
+            $response->update(['regular_needed' => $index === 1 ? false : null, 'waiting_needed' => $index === 2, 'responded_at' => now()]);
         }
     }
 }

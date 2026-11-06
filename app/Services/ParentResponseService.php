@@ -22,7 +22,7 @@ class ParentResponseService
         return $token;
     }
 
-    /** @param array{regular_needed?: bool|null, waiting_needed?: bool, volunteer?: bool} $data */
+    /** @param array{regular_needed?: bool|null, waiting_needed?: bool} $data */
     public function save(string $plainToken, array $data): EmergencyResponse
     {
         return DB::transaction(function () use ($plainToken, $data): EmergencyResponse {
@@ -37,7 +37,7 @@ class ParentResponseService
         });
     }
 
-    /** @param array{regular_needed?: bool|null, waiting_needed?: bool, volunteer?: bool} $data */
+    /** @param array{regular_needed?: bool|null, waiting_needed?: bool} $data */
     public function saveAsAdministrator(EmergencyResponse $response, array $data, User $administrator): EmergencyResponse
     {
         return DB::transaction(function () use ($response, $data, $administrator): EmergencyResponse {
@@ -53,7 +53,7 @@ class ParentResponseService
     }
 
     /**
-     * @param  array{regular_needed?: bool|null, waiting_needed?: bool, volunteer?: bool}  $data
+     * @param  array{regular_needed?: bool|null, waiting_needed?: bool}  $data
      * @param  array<string, mixed>  $context
      */
     private function persist(EmergencyResponse $response, EmergencyAllocation $allocation, array $data, string $event, array $context, bool $invalidateProposal = false): EmergencyResponse
@@ -66,10 +66,10 @@ class ParentResponseService
         if ($regular && (! array_key_exists('regular_needed', $data) || $data['regular_needed'] === null)) {
             throw ValidationException::withMessages(['regular_needed' => 'Bitte den Bedarf am regulären Platz angeben.']);
         }
-        $before = $response->only(['regular_needed', 'waiting_needed', 'volunteer', 'responded_at']);
-        $response->update(['regular_needed' => $regular ? $data['regular_needed'] : null, 'waiting_needed' => ! $regular && ($data['waiting_needed'] ?? false), 'volunteer' => $data['volunteer'] ?? false, 'responded_at' => now()]);
-        $after = $response->only(['regular_needed', 'waiting_needed', 'volunteer', 'responded_at']);
-        $changed = $before['responded_at'] === null || $before['regular_needed'] !== $after['regular_needed'] || $before['waiting_needed'] !== $after['waiting_needed'] || $before['volunteer'] !== $after['volunteer'];
+        $before = $response->only(['regular_needed', 'waiting_needed', 'responded_at']);
+        $response->update(['regular_needed' => $regular ? $data['regular_needed'] : null, 'waiting_needed' => ! $regular && ($data['waiting_needed'] ?? false), 'responded_at' => now()]);
+        $after = $response->only(['regular_needed', 'waiting_needed', 'responded_at']);
+        $changed = $before['responded_at'] === null || $before['regular_needed'] !== $after['regular_needed'] || $before['waiting_needed'] !== $after['waiting_needed'];
         $proposalInvalidated = $invalidateProposal && $changed;
         if ($proposalInvalidated) {
             $this->allocations->discard($allocation, reason: 'Rückmeldung durch Admin korrigiert.');

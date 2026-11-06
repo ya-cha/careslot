@@ -93,9 +93,10 @@ it('leaves the waiting list unchanged when no one needs a place', function () {
     $this->assertDatabaseCount('waiting_list_movements', 0);
 });
 
-it('draws exactly the remaining places without moving volunteers and preserves the draw', function () {
-    [$year, $children, $allocation] = careScenario(['never', 'never', 'never'], 2);
-    $allocation->responses()->update(['volunteer' => true, 'responded_at' => now()]);
+it('keeps the proposal stable and leaves unrequested places free after regular and waiting allocation', function () {
+    [$year, $children, $allocation] = careScenario(['always', 'always', 'never', 'never'], 4);
+    $allocation->responses()->where('child_id', $children[1]->id)->update(['regular_needed' => false, 'responded_at' => now()]);
+    $allocation->responses()->where('child_id', $children[2]->id)->update(['waiting_needed' => true, 'responded_at' => now()]);
     $service = app(EmergencyAllocationService::class);
     $service->close($allocation);
 
@@ -103,24 +104,12 @@ it('draws exactly the remaining places without moving volunteers and preserves t
     $second = $service->propose($allocation);
     $service->confirm($allocation, User::factory()->administrator()->create());
 
-    expect($proposal['lottery']['winners'])->toHaveCount(2);
-    expect($proposal['lottery']['losers'])->toHaveCount(1);
-    expect($second)->toEqual($proposal);
-    expect($year->waitingListEntries()->orderBy('position')->pluck('child_id')->all())->toBe($children->pluck('id')->all());
-    $this->assertDatabaseCount('lottery_draws', 1);
-    $this->assertDatabaseCount('waiting_list_movements', 0);
-});
-
-it('awards all volunteers when fewer apply and keeps unused places free', function () {
-    [$year, $children, $allocation] = careScenario(['never', 'never'], 3);
-    $allocation->responses()->where('child_id', $children[0]->id)->update(['volunteer' => true]);
-    $service = app(EmergencyAllocationService::class);
-    $service->close($allocation);
-
-    $proposal = $service->propose($allocation);
-
-    expect($proposal['lottery']['winners'])->toBe([$children[0]->id]);
+    expect(array_column($proposal['rows'], 'phase'))->toBe([1, null, 2, null]);
     expect($proposal['remaining'])->toBe(2);
+    expect($second)->toEqual($proposal);
+    $this->assertDatabaseHas('allocation_results', ['child_id' => $children[1]->id, 'awarded' => false]);
+    $this->assertDatabaseHas('allocation_results', ['child_id' => $children[3]->id, 'awarded' => false]);
+    expect($year->waitingListEntries()->orderBy('position')->pluck('child_id')->all())->toBe([$children[0]->id, $children[1]->id, $children[3]->id, $children[2]->id]);
 });
 
 it('blocks calculation before closing responses', function () {
@@ -195,7 +184,7 @@ it('creates an alphabetical base list once and appends new children', function (
 it('excludes deactivated children from future allocation', function () {
     [$year, $children, $allocation] = careScenario(['always', 'never']);
     $children[0]->update(['active' => false]);
-    $allocation->responses()->update(['waiting_needed' => true, 'volunteer' => true]);
+    $allocation->responses()->update(['waiting_needed' => true]);
     $service = app(EmergencyAllocationService::class);
     $service->close($allocation);
 
@@ -239,7 +228,7 @@ it('invalidates a concurrent proposal when another procedure changes the same wa
 
 it('can discard an outdated proposal without changing the waiting list', function () {
     [$year, $children, $allocation] = careScenario(['never', 'never']);
-    $allocation->responses()->update(['volunteer' => true]);
+    $allocation->responses()->update(['waiting_needed' => true]);
     $service = app(EmergencyAllocationService::class);
     $service->close($allocation);
     $service->propose($allocation);

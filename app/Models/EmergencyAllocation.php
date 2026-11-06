@@ -10,13 +10,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * @property EmergencyDay $emergencyDay
  * @property Collection<int, EmergencyResponse> $responses
  * @property Collection<int, AllocationResult> $results
- * @property LotteryDraw |null $lotteryDraw
  * @property EmergencyAllocation $previousAllocation
  * @property int $capacity
  * @property int|null $source_revision
@@ -59,12 +57,6 @@ class EmergencyAllocation extends Model
     public function results(): HasMany
     {
         return $this->hasMany(AllocationResult::class);
-    }
-
-    /** @return HasOne<LotteryDraw, $this> */
-    public function lotteryDraw(): HasOne
-    {
-        return $this->hasOne(LotteryDraw::class);
     }
 
     /** @return BelongsTo<EmergencyAllocation, $this> */

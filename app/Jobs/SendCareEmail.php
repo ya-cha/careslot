@@ -35,8 +35,8 @@ class SendCareEmail implements ShouldBeUnique, ShouldQueue
     public function handle(): void
     {
         Cache::lock('care-email:'.$this->deliveryId, 60)->block(5, function (): void {
-            $delivery = EmailDelivery::findOrFail($this->deliveryId);
-            if ($delivery->sent_at) {
+            $delivery = EmailDelivery::find($this->deliveryId);
+            if (! $delivery || $delivery->sent_at) {
                 return;
             }
             $payload = $delivery->payload;

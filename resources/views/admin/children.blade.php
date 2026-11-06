@@ -1,7 +1,49 @@
 @extends('layouts.app')
 @section('title', 'Kinder & Familien')
 @section('content')
-<div class="page-heading"><div><h1>Kinder & Familien</h1><p class="muted">Kontakte, Betreuungsansprüche und Kita-Zugehörigkeit verwalten.</p></div><a class="btn" href="{{ route('children.create') }}">＋ Kind aufnehmen</a></div>
-<form class="mb-6 flex max-w-md items-end gap-3" method="GET"><label class="grow">Kind suchen<input name="search" value="{{ $search }}" placeholder="Vor- oder Nachname"></label><button class="btn-secondary">Suchen</button></form>
-<div class="panel overflow-x-auto"><table><thead><tr><th>Kind</th><th>Gruppe / Kita-Jahr</th><th>Elternkontakte</th><th>Warteliste</th><th>Status</th><th></th></tr></thead><tbody>@forelse($children as $child)<tr><td class="font-semibold">{{ $child->first_name }} {{ $child->last_name }}</td><td>{{ $child->group->name }}<p class="mt-1 text-xs text-stone-500">{{ $child->kitaYear->name }}</p></td><td>@foreach($child->family->contacts as $contact)<p>{{ $contact->name }}</p><p class="mb-1 text-xs text-stone-500">{{ $contact->email }}</p>@endforeach</td><td>{{ $child->waitingListEntry?->position ?? 'Grundliste ausstehend' }}</td><td><span class="{{ $child->active ? 'badge' : 'badge-amber' }}">{{ $child->active ? 'Aktiv' : 'Ausgeschieden' }}</span></td><td><a class="text-emerald-800" href="{{ route('children.edit', $child) }}">Bearbeiten ↗</a></td></tr>@empty<tr><td colspan="6" class="py-12 text-center text-stone-500">Noch keine passenden Kinder vorhanden.</td></tr>@endforelse</tbody></table><div class="mt-4">{{ $children->links() }}</div></div>
+<div class="page-heading">
+    <div><h1>Kinder & Familien</h1><p class="muted">Kontakte, Betreuungsansprüche und Kita-Zugehörigkeit verwalten.</p></div>
+    <x-button :href="route('children.create')" icon="plus" text="Kind aufnehmen" />
+</div>
+<form class="mb-6 flex max-w-lg flex-wrap items-end gap-3" method="GET">
+    <div class="min-w-48 grow"><x-input label="Kind suchen" name="search" :value="$search" icon="magnifying-glass" placeholder="Vor- oder Nachname" /></div>
+    <x-button submit color="gray" outline text="Suchen" />
+</form>
+<x-card bordered shadowless paddingless>
+    <x-table :headers="[
+        ['index' => 'child', 'label' => 'Kind'],
+        ['index' => 'group', 'label' => 'Gruppe / Kita-Jahr'],
+        ['index' => 'contacts', 'label' => 'Elternkontakte'],
+        ['index' => 'position', 'label' => 'Warteliste'],
+        ['index' => 'status', 'label' => 'Status'],
+        ['index' => 'action', 'label' => ''],
+    ]" :rows="$children" :sort="[]">
+        @interact('column_child', $child)
+            <span class="font-semibold text-gray-900">{{ $child->first_name }} {{ $child->last_name }}</span>
+        @endinteract
+        @interact('column_group', $child)
+            {{ $child->group->name }}<p class="mt-1 text-xs text-gray-500">{{ $child->kitaYear->name }}</p>
+        @endinteract
+        @interact('column_contacts', $child)
+            @foreach($child->family->contacts as $contact)
+                <div class="mb-2 last:mb-0"><p>{{ $contact->name }}</p><p class="mt-0.5 text-xs text-gray-500">{{ $contact->email }}</p></div>
+            @endforeach
+        @endinteract
+        @interact('column_position', $child)
+            @if($child->waitingListEntry)<span class="position">{{ $child->waitingListEntry->position }}</span>@else<span class="text-xs text-gray-500">Grundliste ausstehend</span>@endif
+        @endinteract
+        @interact('column_status', $child)
+            <x-badge :color="$child->active ? 'indigo' : 'gray'" light>{{ $child->active ? 'Aktiv' : 'Ausgeschieden' }}</x-badge>
+        @endinteract
+        @interact('column_action', $child)
+            <x-button :href="route('children.edit', $child)" flat sm text="Bearbeiten" icon="pencil-square" />
+        @endinteract
+        <x-slot:empty>
+            <div class="py-8 text-center"><x-icon icon="users" class="mx-auto mb-3 size-9 text-gray-300" /><p>Noch keine passenden Kinder vorhanden.</p></div>
+        </x-slot:empty>
+    </x-table>
+    @if($children->hasPages())
+        <x-slot:footer unwrapped>{{ $children->links() }}</x-slot:footer>
+    @endif
+</x-card>
 @endsection

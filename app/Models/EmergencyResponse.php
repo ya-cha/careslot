@@ -18,10 +18,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property array<string, mixed> $claim_snapshot
  * @property bool|null $regular_needed
  * @property bool $waiting_needed
- * @property bool $volunteer
  * @property CarbonImmutable|null $responded_at
  */
-#[Fillable(['emergency_allocation_id', 'child_id', 'claim_snapshot', 'regular_needed', 'waiting_needed', 'volunteer', 'responded_at'])]
+#[Fillable(['emergency_allocation_id', 'child_id', 'claim_snapshot', 'regular_needed', 'waiting_needed', 'responded_at'])]
 class EmergencyResponse extends Model
 {
     /** @use HasFactory<EmergencyResponseFactory> */
@@ -30,7 +29,7 @@ class EmergencyResponse extends Model
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['claim_snapshot' => 'array', 'regular_needed' => 'boolean', 'waiting_needed' => 'boolean', 'volunteer' => 'boolean', 'responded_at' => 'immutable_datetime'];
+        return ['claim_snapshot' => 'array', 'regular_needed' => 'boolean', 'waiting_needed' => 'boolean', 'responded_at' => 'immutable_datetime'];
     }
 
     /** @return BelongsTo<EmergencyAllocation, $this> */

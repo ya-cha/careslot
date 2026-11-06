@@ -14,6 +14,6 @@ class ParentResponseRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        return ['regular_needed' => ['nullable', 'boolean'], 'waiting_needed' => ['required', 'boolean'], 'volunteer' => ['required', 'boolean']];
+        return ['regular_needed' => ['nullable', 'boolean'], 'waiting_needed' => ['required', 'boolean']];
     }
 }

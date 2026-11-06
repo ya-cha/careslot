@@ -1,32 +1,34 @@
 @import 'tailwindcss';
+@import '../../vendor/tallstackui/tallstackui/css/v4.css';
+
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
+@source '../../app/Providers/*.php';
 @source '../**/*.blade.php';
 @source '../**/*.js';
 
-@theme { --font-sans: 'Avenir Next', 'Segoe UI', sans-serif; }
-@layer base {
-    button, a, input, select, textarea { @apply outline-offset-4; }
-    button { @apply cursor-pointer; }
-    h1 { @apply text-3xl font-semibold tracking-tight lg:text-4xl; }
-    h2 { @apply text-lg font-semibold tracking-tight; }
-    label { @apply block text-sm font-medium; }
-    input:not([type=checkbox]):not([type=radio]):not([type=hidden]), select, textarea { @apply mt-2 block w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-800 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/15; }
-    input[type=checkbox], input[type=radio] { @apply accent-emerald-800; }
-    table { @apply w-full text-left text-sm; }
-    th { @apply border-b border-stone-200 pb-3 text-xs font-medium text-stone-500; }
-    td { @apply border-b border-stone-100 py-4 pr-4 align-top; }
-    tbody tr:last-child td { @apply border-0; }
+@theme {
+    --font-sans: 'Instrument Sans', 'Segoe UI', sans-serif;
 }
+
+@layer base {
+    body { @apply bg-gray-50 text-gray-900 antialiased; }
+    button, a, input, select, textarea, summary { @apply outline-offset-4; }
+    h1 { @apply text-2xl font-semibold tracking-tight sm:text-3xl; }
+    h2 { @apply text-base font-semibold tracking-tight; }
+    label { @apply text-sm font-medium; }
+}
+
 @layer components {
-    .panel { @apply rounded-2xl border border-stone-200 bg-white p-6 shadow-[0_2px_3px_#00000002]; }
-    .btn { @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-emerald-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-50; }
-    .btn-secondary { @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm font-medium hover:bg-stone-50; }
-    .nav-link { @apply flex items-center gap-2 rounded-lg px-3 py-3 text-sm font-medium text-stone-600 transition hover:bg-white/70; }
-    .badge { @apply inline-flex rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800; }
-    .badge-amber { @apply inline-flex rounded-md bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800; }
-    .position { @apply inline-grid size-8 place-items-center rounded-lg bg-stone-100 text-xs font-semibold; }
-    .eyebrow { @apply mb-3 text-[11px] font-bold tracking-[.18em] text-emerald-800 uppercase; }
-    .page-heading { @apply mb-8 flex flex-wrap items-end justify-between gap-4; }
-    .muted { @apply mt-3 text-sm leading-relaxed text-stone-500; }
+    .page-heading { @apply mb-8 flex flex-wrap items-center justify-between gap-4; }
+    .eyebrow { @apply mb-2 text-xs font-semibold tracking-wider text-indigo-600 uppercase; }
+    .muted { @apply mt-2 text-sm leading-relaxed text-gray-500; }
+    .position { @apply inline-grid size-9 place-items-center rounded-lg bg-indigo-50 text-sm font-semibold text-indigo-700 tabular-nums; }
+    .data-table { @apply w-full text-left text-sm; }
+    .data-table thead { @apply bg-gray-50; }
+    .data-table th { @apply border-b border-gray-200 px-4 py-3 text-xs font-semibold whitespace-nowrap text-gray-500; }
+    .data-table td { @apply border-b border-gray-100 px-4 py-4 align-top; }
+    .data-table tbody tr { @apply transition-colors hover:bg-gray-50/70; }
+    .data-table tbody tr:last-child td { @apply border-0; }
+    .form-actions { @apply flex flex-wrap items-center justify-end gap-4 border-t border-gray-200 pt-6; }
 }

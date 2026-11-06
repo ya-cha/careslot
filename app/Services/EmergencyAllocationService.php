@@ -6,13 +6,11 @@ use App\Models\EmailDelivery;
 use App\Models\EmergencyAllocation;
 use App\Models\EmergencyDay;
 use App\Models\KitaYear;
-use App\Models\LotteryDraw;
 use App\Models\User;
 use App\Models\WaitingListMovement;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use Random\Randomizer;
 
 class EmergencyAllocationService
 {
@@ -113,7 +111,7 @@ class EmergencyAllocationService
                     'phase' => $awarded ? 1 : null, 'awarded' => $awarded, 'offered' => $regular, 'takes_place' => $awarded,
                     'original_position' => $positions->get($response->child_id), 'new_position' => $positions->get($response->child_id),
                     'reason' => ! $active ? 'Kind ist ausgeschieden oder hat die Gruppe gewechselt.' : ($awarded ? ($response->responded_at ? 'Regulärer Platz benötigt.' : 'Keine Rückmeldung: regulärer Standardanspruch bleibt bestehen.') : ($regular ? 'Regulären Platz freigegeben; Wartelistenposition bleibt erhalten.' : 'Kein regulärer Platz.')),
-                    'snapshot' => ['claim' => $claim, 'regular' => $regular, 'response' => ['regular_needed' => $response->regular_needed, 'waiting_needed' => $response->waiting_needed, 'volunteer' => $response->volunteer, 'responded_at' => $response->responded_at?->toIso8601String()]]];
+                    'snapshot' => ['claim' => $claim, 'regular' => $regular, 'response' => ['regular_needed' => $response->regular_needed, 'waiting_needed' => $response->waiting_needed, 'responded_at' => $response->responded_at?->toIso8601String()]]];
             }
             $remaining = $allocation->capacity - count(array_filter($rows, fn ($row) => $row['awarded']));
             if ($remaining < 0) {
@@ -134,34 +132,14 @@ class EmergencyAllocationService
                     $moved[] = $id;
                 }
             }
-            $candidates = [];
-            if ($remaining > 0) {
-                foreach ($responses as $response) {
-                    if ($response->child->active && $response->child->group_id === $allocation->emergencyDay->group_id && ! $rows[$response->child_id]['awarded'] && $response->volunteer) {
-                        $candidates[] = $response->child_id;
-                    }
-                }
-            }
-            $availableLottery = $remaining;
-            $winners = count($candidates) > $remaining ? array_slice((new Randomizer)->shuffleArray($candidates), 0, $remaining) : $candidates;
-            foreach ($winners as $id) {
-                $rows[$id] = array_replace($rows[$id], ['awarded' => true, 'takes_place' => true, 'offered' => true, 'phase' => 3, 'reason' => 'Freiwilliger Platz aus Phase 3; keine Wartelistenverschiebung.']);
-                $remaining--;
-            }
-            foreach (array_diff($candidates, $winners) as $id) {
-                $rows[$id]['reason'] = 'Im Losverfahren nicht ausgelost; Wartelistenposition bleibt erhalten.';
-            }
             $order = array_merge($entries->pluck('child_id')->reject(fn ($id) => in_array($id, $moved, true))->values()->all(), $moved);
             foreach ($order as $index => $id) {
                 if ($moved !== [] && isset($rows[$id])) {
                     $rows[$id]['new_position'] = $index + 1;
                 }
             }
-            $proposal = ['capacity' => $allocation->capacity, 'remaining' => $remaining, 'rows' => array_values($rows), 'waiting_order' => $order, 'moved' => $moved, 'lottery' => ['candidates' => $candidates, 'winners' => $winners, 'losers' => array_values(array_diff($candidates, $winners)), 'available_places' => $availableLottery, 'drawn_at' => now()->toIso8601String()]];
+            $proposal = ['capacity' => $allocation->capacity, 'remaining' => $remaining, 'rows' => array_values($rows), 'waiting_order' => $order, 'moved' => $moved];
             $allocation->update(['status' => 'proposed', 'source_revision' => $list->revision, 'calculated_at' => now(), 'proposal' => $proposal]);
-            if ($availableLottery > 0) {
-                LotteryDraw::create(['emergency_allocation_id' => $allocation->id, ...$proposal['lottery']]);
-            }
             $this->audit->record('allocation.proposed', $allocation, ['remaining' => $remaining, 'moved' => $moved]);
 
             return $proposal;
@@ -226,7 +204,6 @@ class EmergencyAllocationService
                 $this->fail('Nur ein unverbindlicher Vorschlag kann verworfen werden.');
             }
             $this->audit->record('allocation.proposal_discarded', $allocation, ['proposal' => $allocation->proposal, 'reason' => $reason]);
-            $allocation->lotteryDraw()->delete();
             $allocation->update(['status' => 'closed', 'proposal' => null, 'source_revision' => null, 'calculated_at' => null]);
         });
     }

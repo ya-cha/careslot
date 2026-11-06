@@ -1,34 +1,83 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="no-referrer">
     <title>@yield('title', 'Übersicht') · careslot</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <tallstackui:script />
     @livewireStyles
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="min-h-screen bg-[#f6f7f3] text-stone-800 antialiased">
-@auth
-@if(auth()->user()->is_admin && !request()->routeIs('parent.*'))
-<div class="lg:grid lg:min-h-screen lg:grid-cols-[238px_1fr]">
-    <aside class="flex flex-col border-r border-stone-200 bg-[#edf1e9] p-6 lg:sticky lg:top-0 lg:h-screen">
-        <a href="{{ route('dashboard') }}" class="mb-8 flex items-center gap-3 text-2xl font-bold tracking-tight"><span class="grid size-10 place-items-center rounded-xl bg-emerald-900 text-white">c<span class="sr-only">areslot</span></span>careslot<span class="text-emerald-700">.</span></a>
-        <p class="mb-4 text-[10px] font-bold tracking-[.18em] text-stone-500">KITA · NOTBETREUUNG</p>
-        <nav class="flex flex-wrap gap-1 lg:flex-col" aria-label="Hauptnavigation">
-        @foreach(['dashboard' => ['Übersicht', '◫'], 'children.index' => ['Kinder & Familien', '♧'], 'waiting-list' => ['Warteliste', '☷'], 'days.create' => ['Notbetreuung anlegen', '＋'], 'years.index' => ['Kita-Jahre', '▦'], 'history' => ['Historie', '◷']] as $name => [$label, $symbol])
-            <a href="{{ route($name) }}" @class(['nav-link', 'bg-white text-emerald-900 shadow-sm' => request()->routeIs($name)])><span class="w-6 text-lg" aria-hidden="true">{{ $symbol }}</span>{{ $label }}</a>
-        @endforeach
-        @can('manage-groups')<a class="nav-link" href="{{ route('groups.index') }}">Gruppen & Admins</a>@endcan
-        </nav>
-        <div class="mt-auto flex items-center gap-3 border-t border-stone-300/50 pt-5"><span class="grid size-9 place-items-center rounded-full bg-stone-200 text-xs font-bold">{{ auth()->user()->initials() }}</span><div class="min-w-0 flex-1"><p class="truncate text-sm font-semibold">{{ auth()->user()->name }}</p><p class="text-xs text-stone-500">{{ auth()->user()->group?->name ?? 'Gesamtverwaltung' }}</p></div><form method="POST" action="{{ route('logout') }}">@csrf<button class="text-stone-500" title="Abmelden" aria-label="Abmelden">↪</button></form></div>
-    </aside>
-    <div class="min-w-0"><header class="flex h-20 items-center justify-between border-b border-stone-200/80 px-6 lg:px-10"><p class="text-sm text-stone-500">Verwaltung <span class="mx-2 text-stone-300">/</span> <span class="text-stone-800">@yield('title', 'Übersicht')</span></p><span class="text-xs text-stone-500">{{ now()->format('d.m.Y') }}</span></header><main class="mx-auto max-w-[1500px] p-6 lg:p-10">@include('layouts.feedback')@yield('content')</main></div>
-</div>
+<body>
+<a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-100 focus:rounded-lg focus:bg-white focus:p-3">Zum Inhalt springen</a>
+@if(auth()->check() && auth()->user()->is_admin && !request()->routeIs('parent.*'))
+    <x-layout>
+        <x-slot:header>
+            <x-layout.header>
+                <x-slot:left>
+                    <span class="hidden text-sm text-gray-400 sm:inline">Verwaltung</span>
+                    <x-icon icon="chevron-right" class="hidden size-3 text-gray-300 sm:inline" />
+                    <span class="text-sm font-medium">@yield('title', 'Übersicht')</span>
+                </x-slot:left>
+                <x-slot:right>
+                    <span class="text-xs text-gray-500">{{ now()->translatedFormat('D, d. M Y') }}</span>
+                </x-slot:right>
+            </x-layout.header>
+        </x-slot:header>
+        <x-slot:menu>
+            <x-side-bar thin-scroll>
+                <x-slot:brand>
+                    <a href="{{ route('dashboard') }}" class="flex items-center gap-3 px-6 pt-7 pb-8" aria-label="careslot – Übersicht">
+                        <span class="grid size-10 place-items-center rounded-xl bg-indigo-600 text-white"><x-icon icon="squares-2x2" class="size-6" /></span>
+                        <span class="text-xl font-bold tracking-tight">careslot<span class="text-indigo-600">.</span></span>
+                    </a>
+                    <p class="px-5 pb-3 text-[10px] font-semibold tracking-[0.16em] text-gray-400 uppercase">Arbeitsbereich</p>
+                </x-slot:brand>
+                <x-side-bar.item text="Übersicht" icon="squares-2x2" :route="route('dashboard')" :current="request()->routeIs('dashboard', 'allocations.*')" />
+                <x-side-bar.item text="Kinder & Familien" icon="users" :route="route('children.index')" :current="request()->routeIs('children.*')" />
+                <x-side-bar.item text="Warteliste" icon="queue-list" :route="route('waiting-list')" :current="request()->routeIs('waiting-list')" />
+                <x-side-bar.item text="Notbetreuung anlegen" icon="calendar-days" :route="route('days.create')" :current="request()->routeIs('days.*')" />
+                <x-side-bar.separator text="Organisation" />
+                <x-side-bar.item text="Kita-Jahre" icon="calendar" :route="route('years.index')" :current="request()->routeIs('years.*')" />
+                @can('manage-groups')
+                    <x-side-bar.item text="Gruppen & Admins" icon="building-office-2" :route="route('groups.index')" :current="request()->routeIs('groups.*')" />
+                @endcan
+                <x-side-bar.item text="Historie" icon="clock" :route="route('history')" :current="request()->routeIs('history')" />
+                <x-slot:footer>
+                    <div class="flex items-center gap-3 px-3 py-2">
+                        <span class="grid size-9 shrink-0 place-items-center rounded-full bg-indigo-50 text-xs font-semibold text-indigo-700">{{ auth()->user()->initials() }}</span>
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate text-sm font-semibold">{{ auth()->user()->name }}</p>
+                            <p class="truncate text-xs text-gray-500">{{ auth()->user()->group?->name ?? 'Gesamtverwaltung' }}</p>
+                        </div>
+                        <form method="POST" action="{{ route('logout') }}">
+                            @csrf
+                            <x-button.circle submit icon="arrow-right-start-on-rectangle" color="gray" flat title="Abmelden" aria-label="Abmelden" />
+                        </form>
+                    </div>
+                </x-slot:footer>
+            </x-side-bar>
+        </x-slot:menu>
+        <div id="main-content" class="mx-auto max-w-[1440px] min-w-0">
+            @include('layouts.feedback')
+            @yield('content')
+        </div>
+    </x-layout>
 @else
-<main class="mx-auto max-w-2xl px-5 py-12"><div class="mb-10 text-2xl font-bold text-emerald-900">careslot.</div>@include('layouts.feedback')@yield('content')</main>
+    <div class="min-h-dvh bg-gray-50">
+        <header class="border-b border-gray-200 bg-white">
+            <div class="mx-auto flex max-w-5xl items-center justify-between px-5 py-5 sm:px-8">
+                <div class="flex items-center gap-2.5"><span class="grid size-8 place-items-center rounded-lg bg-indigo-600 text-white"><x-icon icon="squares-2x2" class="size-5" /></span><span class="text-lg font-bold tracking-tight">careslot<span class="text-indigo-600">.</span></span></div>
+                <span class="text-xs text-gray-500">{{ request()->routeIs('parent.*') ? 'Elternrückmeldung' : 'Kita-Verwaltung' }}</span>
+            </div>
+        </header>
+        <main id="main-content" class="mx-auto max-w-2xl px-5 py-10 sm:py-16">
+            @include('layouts.feedback')
+            @yield('content')
+        </main>
+    </div>
 @endif
-@else
-<main class="mx-auto max-w-2xl px-5 py-12"><div class="mb-10 text-2xl font-bold text-emerald-900">careslot.</div>@include('layouts.feedback')@yield('content')</main>
-@endauth
 @livewireScripts
 </body>
 </html>

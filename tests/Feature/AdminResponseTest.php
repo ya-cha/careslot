@@ -16,10 +16,9 @@ it('lets a group administrator record a missing parent response without a person
     $admin = User::factory()->administrator()->for($allocation->emergencyDay->group, 'group')->create();
     $this->actingAs($admin);
 
-    $this->put(route('responses.admin.update', $response), ['regular_needed' => false, 'waiting_needed' => false, 'volunteer' => true])->assertRedirect(route('allocations.show', $allocation));
+    $this->put(route('responses.admin.update', $response), ['regular_needed' => false, 'waiting_needed' => false])->assertRedirect(route('allocations.show', $allocation));
 
     expect($response->fresh()->regular_needed)->toBeFalse();
-    expect($response->fresh()->volunteer)->toBeTrue();
     expect($response->fresh()->responded_at)->not->toBeNull();
     $audit = AuditLog::where('event', 'response.admin_saved')->sole();
     expect($audit->user_id)->toBe($admin->id);
@@ -38,14 +37,13 @@ it('lets a system administrator update an existing answer and preserves its prev
     $this->freezeTime();
     [$year, $children, $allocation] = careScenario(['never']);
     $response = $allocation->responses()->firstOrFail();
-    $response->update(['waiting_needed' => true, 'volunteer' => false, 'responded_at' => now()->subHour()]);
+    $response->update(['waiting_needed' => true, 'responded_at' => now()->subHour()]);
     $this->actingAs(User::factory()->administrator()->create());
 
-    $this->put(route('responses.admin.update', $response), ['regular_needed' => true, 'waiting_needed' => false, 'volunteer' => true])->assertRedirect();
+    $this->put(route('responses.admin.update', $response), ['regular_needed' => true, 'waiting_needed' => false])->assertRedirect();
 
     expect($response->fresh()->regular_needed)->toBeNull();
     expect($response->fresh()->waiting_needed)->toBeFalse();
-    expect($response->fresh()->volunteer)->toBeTrue();
     $audit = AuditLog::where('event', 'response.admin_saved')->sole();
     expect($audit->data['before']['waiting_needed'])->toBeTrue();
     expect($audit->data['after']['waiting_needed'])->toBeFalse();
@@ -55,8 +53,8 @@ it('uses admin-entered answers in the allocation without moving the list during 
     [$year, $children, $allocation] = careScenario(['always', 'never']);
     $responses = $allocation->responses()->orderBy('child_id')->get();
     $this->actingAs(User::factory()->administrator()->create());
-    $this->put(route('responses.admin.update', $responses[0]), ['regular_needed' => false, 'waiting_needed' => true, 'volunteer' => false])->assertRedirect();
-    $this->put(route('responses.admin.update', $responses[1]), ['waiting_needed' => true, 'volunteer' => false])->assertRedirect();
+    $this->put(route('responses.admin.update', $responses[0]), ['regular_needed' => false, 'waiting_needed' => true])->assertRedirect();
+    $this->put(route('responses.admin.update', $responses[1]), ['waiting_needed' => true])->assertRedirect();
     $service = app(EmergencyAllocationService::class);
     $service->close($allocation);
 
@@ -75,10 +73,10 @@ it('lets parents revise an admin-entered response while the phase is still open'
     $plainToken = bin2hex(random_bytes(32));
     PersonalAccessToken::factory()->for($response, 'response')->for($contact)->create(['token_hash' => hash('sha256', $plainToken)]);
     $this->actingAs(User::factory()->administrator()->create());
-    $this->put(route('responses.admin.update', $response), ['regular_needed' => false, 'waiting_needed' => false, 'volunteer' => false])->assertRedirect();
+    $this->put(route('responses.admin.update', $response), ['regular_needed' => false, 'waiting_needed' => false])->assertRedirect();
     $this->post(route('logout'))->assertRedirect();
 
-    $this->post(route('parent.update', $plainToken), ['regular_needed' => true, 'waiting_needed' => false, 'volunteer' => false])->assertRedirect();
+    $this->post(route('parent.update', $plainToken), ['regular_needed' => true, 'waiting_needed' => false])->assertRedirect();
 
     expect($response->fresh()->regular_needed)->toBeTrue();
     $this->assertDatabaseHas('audit_logs', ['event' => 'response.admin_saved']);
@@ -97,7 +95,7 @@ it('does not let admins change confirmed responses or final allocation results',
     $snapshot = $result->snapshot;
     $this->actingAs($admin);
 
-    $this->put(route('responses.admin.update', $response), ['regular_needed' => false, 'waiting_needed' => false, 'volunteer' => true])->assertSessionHasErrors(['response' => 'Die Vergabe ist bereits bestätigt. Änderungen erfordern ein neues Verfahren.']);
+    $this->put(route('responses.admin.update', $response), ['regular_needed' => false, 'waiting_needed' => false])->assertSessionHasErrors(['response' => 'Die Vergabe ist bereits bestätigt. Änderungen erfordern ein neues Verfahren.']);
 
     expect($response->fresh()->regular_needed)->toBeNull();
     expect($result->fresh()->awarded)->toBeTrue();
@@ -125,7 +123,7 @@ it('requires an authenticated administrator to enter parent responses', function
     }
     $response = $allocation->responses()->firstOrFail();
 
-    $result = $this->put(route('responses.admin.update', $response), ['waiting_needed' => true, 'volunteer' => true]);
+    $result = $this->put(route('responses.admin.update', $response), ['waiting_needed' => true]);
 
     if ($authenticated) {
         $result->assertForbidden();
@@ -140,7 +138,7 @@ it('requires an explicit regular care decision for entitled children', function 
     $response = $allocation->responses()->firstOrFail();
     $this->actingAs(User::factory()->administrator()->create());
 
-    $this->put(route('responses.admin.update', $response), ['waiting_needed' => false, 'volunteer' => false])->assertSessionHasErrors(['regular_needed' => 'Bitte den Bedarf am regulären Platz angeben.']);
+    $this->put(route('responses.admin.update', $response), ['waiting_needed' => false])->assertSessionHasErrors(['regular_needed' => 'Bitte den Bedarf am regulären Platz angeben.']);
 
     expect($response->fresh()->responded_at)->toBeNull();
 });
@@ -149,13 +147,13 @@ it('validates admin-entered answers with the same boolean rules as parent answer
     [$year, $children, $allocation] = careScenario(['always']);
     $response = $allocation->responses()->firstOrFail();
     $this->actingAs(User::factory()->administrator()->create());
-    $payload = ['regular_needed' => true, 'waiting_needed' => false, 'volunteer' => false];
+    $payload = ['regular_needed' => true, 'waiting_needed' => false];
     $payload[$field] = 'invalid';
 
     $this->put(route('responses.admin.update', $response), $payload)->assertSessionHasErrors($field);
 
     expect($response->fresh()->responded_at)->toBeNull();
-})->with(['regular_needed', 'waiting_needed', 'volunteer']);
+})->with(['regular_needed', 'waiting_needed']);
 
 it('does not permit response entry for inactive or transferred children', function (bool $transferred) {
     [$year, $children, $allocation] = careScenario(['never']);
@@ -163,7 +161,7 @@ it('does not permit response entry for inactive or transferred children', functi
     $children[0]->update($transferred ? ['group_id' => CareGroup::factory()->create()->id] : ['active' => false]);
     $this->actingAs(User::factory()->administrator()->create());
 
-    $this->put(route('responses.admin.update', $response), ['waiting_needed' => true, 'volunteer' => false])->assertNotFound();
+    $this->put(route('responses.admin.update', $response), ['waiting_needed' => true])->assertNotFound();
 
     expect($response->fresh()->responded_at)->toBeNull();
 })->with(['inactive' => false, 'transferred' => true]);
@@ -173,7 +171,7 @@ it('ignores spoofed child and procedure ids when recording a response', function
     $responses = $allocation->responses()->orderBy('child_id')->get();
     $this->actingAs(User::factory()->administrator()->create());
 
-    $this->put(route('responses.admin.update', $responses[0]), ['child_id' => $children[1]->id, 'emergency_allocation_id' => 99999, 'waiting_needed' => true, 'volunteer' => false])->assertRedirect();
+    $this->put(route('responses.admin.update', $responses[0]), ['child_id' => $children[1]->id, 'emergency_allocation_id' => 99999, 'waiting_needed' => true])->assertRedirect();
 
     expect($responses[0]->fresh()->child_id)->toBe($children[0]->id);
     expect($responses[0]->fresh()->emergency_allocation_id)->toBe($allocation->id);
@@ -195,17 +193,16 @@ it('allows admin corrections after the deadline or manual closure while keeping 
     PersonalAccessToken::factory()->for($response, 'response')->for($contact)->create(['token_hash' => hash('sha256', $plain)]);
     $this->actingAs(User::factory()->administrator()->for($allocation->emergencyDay->group, 'group')->create());
 
-    $this->put(route('responses.admin.update', $response), ['regular_needed' => false, 'waiting_needed' => false, 'volunteer' => true])->assertRedirect();
+    $this->put(route('responses.admin.update', $response), ['regular_needed' => false, 'waiting_needed' => false])->assertRedirect();
 
     expect($response->fresh()->regular_needed)->toBeFalse();
-    expect($response->fresh()->volunteer)->toBeTrue();
     expect($allocation->fresh()->status)->toBe($state);
     expect($allocation->fresh()->responses_closed_at)->toEqual($closedAt);
     $audit = AuditLog::where('event', 'response.admin_saved')->sole();
     expect($audit->data['after_response_deadline'])->toBeTrue();
     expect($audit->data['allocation_status_before'])->toBe($state);
     $this->get(route('allocations.show', $allocation))->assertOk()->assertSee('Rückmeldung ändern');
-    $this->post(route('parent.update', $plain), ['regular_needed' => true, 'waiting_needed' => false, 'volunteer' => false])->assertSessionHasErrors(['response' => 'Die Rückmeldungsphase ist geschlossen.']);
+    $this->post(route('parent.update', $plain), ['regular_needed' => true, 'waiting_needed' => false])->assertSessionHasErrors(['response' => 'Die Rückmeldungsphase ist geschlossen.']);
     expect($response->fresh()->regular_needed)->toBeFalse();
     $this->assertDatabaseCount('allocation_results', 0);
     $this->assertDatabaseCount('waiting_list_movements', 0);
@@ -215,7 +212,7 @@ it('allows admin corrections after the deadline or manual closure while keeping 
 it('archives and invalidates the proposal after an admin correction and refuses stale confirmations', function () {
     $this->freezeTime();
     [$year, $children, $allocation] = careScenario(['never', 'never']);
-    $allocation->responses()->update(['volunteer' => true, 'responded_at' => now()]);
+    $allocation->responses()->update(['waiting_needed' => true, 'responded_at' => now()]);
     $service = app(EmergencyAllocationService::class);
     $service->close($allocation);
     $oldProposal = $service->propose($allocation);
@@ -224,13 +221,12 @@ it('archives and invalidates the proposal after an admin correction and refuses 
     $this->actingAs(User::factory()->administrator()->create());
     $this->get(route('allocations.show', $allocation))->assertOk()->assertSee('Geänderte Angaben verwerfen den aktuellen Vorschlag.');
 
-    $this->put(route('responses.admin.update', $response), ['waiting_needed' => false, 'volunteer' => false])->assertRedirect();
+    $this->put(route('responses.admin.update', $response), ['waiting_needed' => false])->assertRedirect();
 
     expect($allocation->fresh()->status)->toBe('closed');
     expect($allocation->fresh()->proposal)->toBeNull();
     expect($allocation->fresh()->source_revision)->toBeNull();
     expect($allocation->fresh()->calculated_at)->toBeNull();
-    $this->assertDatabaseCount('lottery_draws', 0);
     $this->assertDatabaseCount('allocation_results', 0);
     $this->assertDatabaseCount('waiting_list_movements', 0);
     $this->assertDatabaseCount('email_deliveries', 0);
@@ -247,14 +243,14 @@ it('archives and invalidates the proposal after an admin correction and refuses 
     $this->assertDatabaseCount('allocation_results', 0);
     $this->post(route('allocations.action', $allocation), ['action' => 'confirm', 'confirmation' => 1, 'proposal_hash' => $newHash])->assertRedirect();
     expect($allocation->fresh()->status)->toBe('confirmed');
-    $this->assertDatabaseHas('allocation_results', ['child_id' => $children[1]->id, 'awarded' => true, 'phase' => 3]);
+    $this->assertDatabaseHas('allocation_results', ['child_id' => $children[1]->id, 'awarded' => true, 'phase' => 2]);
     $this->assertDatabaseHas('allocation_results', ['child_id' => $children[0]->id, 'awarded' => false]);
 });
 
-it('preserves an existing draw when an admin saves unchanged answers', function () {
+it('preserves an existing proposal when an admin saves unchanged answers', function () {
     $this->freezeTime();
     [$year, $children, $allocation] = careScenario(['never', 'never']);
-    $allocation->responses()->update(['volunteer' => true, 'responded_at' => now()]);
+    $allocation->responses()->update(['waiting_needed' => true, 'responded_at' => now()]);
     $service = app(EmergencyAllocationService::class);
     $service->close($allocation);
     $proposal = $service->propose($allocation);
@@ -262,11 +258,10 @@ it('preserves an existing draw when an admin saves unchanged answers', function 
     $this->travel(1)->minute();
     $this->actingAs(User::factory()->administrator()->create());
 
-    $this->put(route('responses.admin.update', $response), ['waiting_needed' => false, 'volunteer' => true])->assertRedirect();
+    $this->put(route('responses.admin.update', $response), ['waiting_needed' => true])->assertRedirect();
 
     expect($allocation->fresh()->status)->toBe('proposed');
     expect($allocation->fresh()->proposal)->toBe($proposal);
-    $this->assertDatabaseCount('lottery_draws', 1);
     $this->assertDatabaseMissing('audit_logs', ['event' => 'allocation.proposal_discarded']);
     expect(AuditLog::where('event', 'response.admin_saved')->sole()->data['proposal_invalidated'])->toBeFalse();
 });
@@ -279,7 +274,7 @@ it('does not discard a proposal when a correction fails validation', function ()
     $response = $allocation->responses()->firstOrFail();
     $this->actingAs(User::factory()->administrator()->create());
 
-    $this->put(route('responses.admin.update', $response), ['waiting_needed' => false, 'volunteer' => false])->assertSessionHasErrors('regular_needed');
+    $this->put(route('responses.admin.update', $response), ['waiting_needed' => false])->assertSessionHasErrors('regular_needed');
 
     expect($allocation->fresh()->status)->toBe('proposed');
     expect($allocation->fresh()->proposal)->toBe($proposal);
@@ -309,7 +304,7 @@ it('rejects a stale admin correction if confirmation has already completed', fun
     $admin = User::factory()->administrator()->create();
     $service->confirm($allocation, $admin);
 
-    expect(fn () => app(ParentResponseService::class)->saveAsAdministrator($staleResponse, ['regular_needed' => false, 'waiting_needed' => false, 'volunteer' => false], $admin))->toThrow(ValidationException::class, 'bereits bestätigt');
+    expect(fn () => app(ParentResponseService::class)->saveAsAdministrator($staleResponse, ['regular_needed' => false, 'waiting_needed' => false], $admin))->toThrow(ValidationException::class, 'bereits bestätigt');
 
     expect($staleResponse->fresh()->regular_needed)->toBeNull();
     $this->assertDatabaseHas('allocation_results', ['child_id' => $children[0]->id, 'awarded' => true]);

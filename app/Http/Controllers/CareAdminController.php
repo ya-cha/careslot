@@ -188,7 +188,7 @@ class CareAdminController extends Controller
     {
         Gate::authorize('update', $allocation);
 
-        return view('admin.allocation', ['allocation' => $allocation->load('emergencyDay.kitaYear', 'responses.child', 'results.child', 'lotteryDraw'), 'deliveries' => EmailDelivery::where('emergency_allocation_id', $allocation->id)->orderByDesc('id')->get(), 'tokens' => PersonalAccessToken::whereHas('response', fn ($query) => $query->where('emergency_allocation_id', $allocation->id))->with('parentContact', 'response.child')->orderByDesc('id')->get()]);
+        return view('admin.allocation', ['allocation' => $allocation->load('emergencyDay.kitaYear', 'responses.child', 'results.child'), 'deliveries' => EmailDelivery::where('emergency_allocation_id', $allocation->id)->orderByDesc('id')->get(), 'tokens' => PersonalAccessToken::whereHas('response', fn ($query) => $query->where('emergency_allocation_id', $allocation->id))->with('parentContact', 'response.child')->orderByDesc('id')->get()]);
     }
 
     public function updateResponse(AdminResponseRequest $request, EmergencyResponse $response, ParentResponseService $responses): RedirectResponse

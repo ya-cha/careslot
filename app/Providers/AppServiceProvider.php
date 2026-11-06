@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use TallStackUi\Facades\TallStackUi;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -32,6 +33,12 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('manage-groups', fn (User $user): bool => $user->isSystemAdministrator());
         Carbon::setLocale('de');
         CarbonImmutable::setLocale('de');
+
+        TallStackUi::customize()->layout()
+            ->block('main', 'mx-auto w-full min-w-0 p-4 sm:p-6 lg:p-10');
+        TallStackUi::customize()->sideBar('item')
+            ->block('item.state.normal', 'text-gray-600 hover:bg-gray-100 dark:text-dark-300 dark:hover:bg-dark-700')
+            ->block('item.icon', 'size-5 shrink-0 transition-all');
     }
 
     /**

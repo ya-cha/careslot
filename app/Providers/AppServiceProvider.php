@@ -31,6 +31,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
         DevCommands::artisan('schedule:work', 'scheduler');
         Gate::define('manage-groups', fn (User $user): bool => $user->isSystemAdministrator());
+        Gate::define('impersonate', fn (User $user): bool => $user->isSystemAdministrator() && ! session()->has('impersonator_id'));
         Carbon::setLocale('de');
         CarbonImmutable::setLocale('de');
 

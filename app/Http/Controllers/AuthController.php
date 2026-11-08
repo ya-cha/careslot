@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\AuditService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,14 +22,20 @@ class AuthController extends Controller
         if (! Auth::attempt([...$credentials, 'is_admin' => true])) {
             throw ValidationException::withMessages(['email' => 'Die Zugangsdaten sind ungültig.']);
         }
+        $request->session()->forget('impersonator_id');
         $request->session()->regenerate();
 
         return redirect()->intended(route('dashboard'));
     }
 
-    public function destroy(Request $request): RedirectResponse
+    public function destroy(Request $request, AuditService $audit): RedirectResponse
     {
-        Auth::logout();
+        if ($request->session()->has('impersonator_id')) {
+            $audit->record('impersonation.ended', $request->user(), ['reason' => 'logout']);
+            Auth::logoutCurrentDevice();
+        } else {
+            Auth::logout();
+        }
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 

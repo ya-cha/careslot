@@ -3,7 +3,9 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CareAdminController;
 use App\Http\Controllers\CareGroupController;
+use App\Http\Controllers\ImpersonationController;
 use App\Http\Controllers\ParentResponseController;
+use App\Http\Controllers\UserController;
 use App\Http\Middleware\PrivateCareResponse;
 use App\Models\EmergencyAllocation;
 use Illuminate\Support\Facades\Route;
@@ -12,6 +14,11 @@ Route::get('/', fn () => redirect()->route(auth()->check() ? 'dashboard' : 'logi
 Route::get('/login', [AuthController::class, 'create'])->name('login');
 Route::post('/login', [AuthController::class, 'store'])->middleware('throttle:5,1')->name('login.store');
 Route::post('/logout', [AuthController::class, 'destroy'])->middleware('auth')->name('logout');
+Route::middleware('auth')->group(function (): void {
+    Route::get('/impersonation', [ImpersonationController::class, 'show'])->name('impersonation.show');
+    Route::post('/impersonation/beenden', [ImpersonationController::class, 'destroy'])->name('impersonation.destroy');
+    Route::post('/impersonation/{user}', [ImpersonationController::class, 'store'])->middleware('can:impersonate')->name('impersonation.store');
+});
 Route::get('/r/{token}', [ParentResponseController::class, 'show'])->middleware(['throttle:60,1', PrivateCareResponse::class])->name('parent.show');
 Route::post('/r/{token}', [ParentResponseController::class, 'update'])->middleware(['throttle:20,1', PrivateCareResponse::class])->name('parent.update');
 
@@ -22,6 +29,9 @@ Route::middleware(['auth', 'can:viewAny,'.EmergencyAllocation::class])->group(fu
         Route::put('/gruppen/{group}', [CareGroupController::class, 'update'])->name('groups.update');
         Route::post('/gruppenadmins/neu', [CareGroupController::class, 'storeAdministrator'])->name('groups.admins.store');
         Route::post('/gruppenadmins', [CareGroupController::class, 'assignAdministrator'])->name('groups.admins');
+        Route::get('/benutzer/{user}/bearbeiten', [UserController::class, 'edit'])->name('users.edit');
+        Route::put('/benutzer/{user}', [UserController::class, 'update'])->name('users.update');
+        Route::put('/benutzer/{user}/passwort', [UserController::class, 'updatePassword'])->name('users.password.update');
     });
     Route::get('/dashboard', [CareAdminController::class, 'dashboard'])->name('dashboard');
     Route::get('/kita-jahre', [CareAdminController::class, 'years'])->name('years.index');

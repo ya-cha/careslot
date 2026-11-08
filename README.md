@@ -1,10 +1,12 @@
-# careslot · Kita-Notbetreuung
+# careslot · Emergency daycare allocation
 
-Laravel 13, PHP 8.5, Livewire 4, Blade und Tailwind CSS 4. Deutschsprachige Verwaltung mit persönlichen Elternlinks, zweiphasiger Vergabe und protokollierter Bestätigung. Keine öffentliche Registrierung, keine Elternkonten und kein SPA.
+Laravel 13, PHP 8.5, Livewire 4, Blade, and Tailwind CSS 4. A German-language administration interface with personal parent links, two-phase allocation, and audited confirmation. No public registration, parent accounts, or SPA.
+
+Interface labels below remain in German to match the application.
 
 ## Installation
 
-Voraussetzungen: PHP 8.5 mit PDO-PgSQL oder PDO-MySQL, Composer, Node.js passend zur installierten Vite-Version, PostgreSQL oder MySQL. Die vorhandene SQLite-Konfiguration wird für lokale Entwicklung und isolierte Tests unterstützt; konkurrierende Bestätigungen im Betrieb benötigen PostgreSQL/MySQL mit Zeilensperren.
+Requirements: PHP 8.5 with PDO-PgSQL or PDO-MySQL, Composer, a Node.js version compatible with the installed Vite version, and PostgreSQL or MySQL. The existing SQLite configuration is supported for local development and isolated tests; concurrent confirmations in production require PostgreSQL/MySQL with row-level locking.
 
 ```sh
 composer install
@@ -14,73 +16,73 @@ npm ci
 npm run build
 ```
 
-In `.env` Datenbankzugang, `APP_URL`, `APP_LOCALE=de`, SMTP und Absender konfigurieren. PostgreSQL ist in `.env.example` vorbelegt. Für MySQL `DB_CONNECTION=mysql` und den passenden Port setzen. Datenbank vorher anlegen. Die Anwendungszeitzone ist `Europe/Berlin`; Kalenderwochen werden nach ISO 8601 ausgewertet.
+Configure database credentials, `APP_URL`, `APP_LOCALE=de`, SMTP, and the sender in `.env`. PostgreSQL is the default in `.env.example`. For MySQL, set `DB_CONNECTION=mysql` and the appropriate port. Create the database first. The application timezone is `Europe/Berlin`; calendar weeks follow ISO 8601.
 
 ```sh
 php artisan migrate --no-interaction
 php artisan careslot:admin beirat@example.org --name="Elternbeirat"
 ```
 
-Das Administratorpasswort wird verdeckt abgefragt und muss mindestens zwölf Zeichen haben. Es gibt keine eingebauten Standardzugangsdaten. `db:seed` erstellt kein Konto.
+The administrator password is requested through a hidden prompt and must contain at least twelve characters. There are no built-in default credentials. `db:seed` does not create an account.
 
-Lokal: `composer run dev` startet Webserver, Vite, Queue und Scheduler gemeinsam. Bei getrennten Prozessen zusätzlich zu `php artisan serve` und `npm run dev` sowohl den Queue-Worker als auch `php artisan schedule:work` starten. Anmeldung unter `/login`. Der Webserver muss `public/` als Document Root verwenden.
+Locally, `composer run dev` starts the web server, Vite, queue worker, and scheduler together. When running separate processes, start both the queue worker and `php artisan schedule:work` in addition to `php artisan serve` and `npm run dev`. Sign in at `/login`. The web server must use `public/` as its document root.
 
-## Einrichtung und Ablauf
+## Setup and workflow
 
-1. Unter **Kita-Jahre** ein Jahr anlegen.
-2. Unter **Gruppen & Admins** Gruppen anlegen und Administratorkonten zuordnen. Unter **Kinder & Familien** jedes Kind einer Gruppe zuordnen und Kontakte aufnehmen. Für Montag bis Freitag Anspruchsart und Gültigkeit ausdrücklich konfigurieren. Bei Geschwistern oder einem weiteren Jahr eine vorhandene Familie derselben Gruppe auswählen. Mehrere Kontakte sind möglich; jeder erhält einen eigenen Link zur Rückmeldung des Kindes.
-3. Erst nach Aufnahme der anfänglichen Kinder die **alphabetische Grundliste je Gruppe** erstellen. Sortiert wird nach Nachname, dann Vorname. Neue aktive Kinder werden anschließend angehängt. Ausgeschiedene Kinder bleiben historisch gespeichert und werden bei Vergaben übersprungen. Die angezeigten Positionen beziehen sich auf die vollständige Liste, daher sind Lücken bei ausgeblendeten ausgeschiedenen Kindern möglich.
-4. Notbetreuungstag mit Kapazität, optionalem Zeitraum und optionaler Rückmeldefrist anlegen. Das Verfahren speichert die damals gültigen Anspruchsregeln für jedes aktive Kind.
-5. Für jeden Wochentag genau eine gültige Anspruchsregel hinterlegen. Individuelle Betreuungsstunden werden nicht erfasst; der Anspruch gilt für den Betreuungstag.
-6. **Anfragen versenden**. Eltern geben ihren regulären Bedarf oder Nachrückbedarf an und können ihre Antwort bis zum Fristende ändern. Mehrere Kontakte desselben Kindes bearbeiten dieselbe Rückmeldung; die letzte gespeicherte Antwort gilt. Berechtigte Gruppenadmins und die Gesamtverwaltung können in der Vergabeansicht bei einem Kind **Rückmeldung erfassen** beziehungsweise **Rückmeldung ändern** wählen und im Namen der Eltern speichern. Dafür ist kein persönlicher Elternlink erforderlich. Es gelten dieselben fachlichen Prüfungen wie im Elternformular. Admins können auch nach Fristende und nach dem Schließen der Rückmeldungsphase korrigieren, solange die Vergabe noch nicht verbindlich bestätigt wurde. Die Historie protokolliert das Administratorkonto und die bisherigen/neuen Werte. Eltern können die Antwort während der offenen Phase weiterhin selbst ändern. Ausgeschiedene oder in eine andere Gruppe gewechselte Kinder sowie verbindlich bestätigte Vergaben bleiben für diese Eingabe gesperrt. Eine Admin-Korrektur öffnet die Rückmeldungsphase nicht wieder für Eltern.
-7. Während einer offenen Rückmeldungsphase kann die Frist in der Vergabeansicht unter **Rückmeldefrist ändern** angepasst oder durch Leeren des Felds entfernt werden. Neue Fristen müssen in der Zukunft liegen. Bestehende Antworten bleiben erhalten, Änderungen werden protokolliert. Noch ausstehende Anfrage-/Erinnerungs-E-Mails erhalten die neue Frist; bereits versendete Nachrichten werden nicht automatisch erneut versendet. Geschlossene Verfahren werden dadurch nicht wieder geöffnet. Rückmeldungen prüfen und Phase manuell schließen, auch vorzeitig bei vollständigen Antworten. Der Scheduler schließt Fristen automatisch. Bereits beim Erreichen der Frist werden weitere Elternänderungen verweigert.
-8. Ändert ein Admin nach der Berechnung eine Rückmeldung oder erfasst erstmals eine Antwort, wird der aktuelle Vorschlag im Audit gesichert und verworfen. Danach muss der Vorschlag neu berechnet und erneut geprüft werden. Unverändertes erneutes Speichern verwirft keinen Vorschlag. Alte geöffnete Bestätigungsseiten können einen inzwischen geänderten Vorschlag nicht bestätigen. **Vorschlag berechnen** und beide Phasen sowie Listenbewegungen prüfen. Ohne Antwort bleibt der reguläre Anspruch bestehen. Für die Warteliste muss Bedarf ausdrücklich gemeldet werden.
-9. Den vollständigen Vorschlag mit Checkbox **verbindlich bestätigen**. Erst dies speichert Ergebnisse, Wartelistenbewegungen und Versandaufträge. Wiederholte Bestätigungen haben keine zusätzlichen Auswirkungen.
-10. Bei geänderter Personalsituation aus der abgeschlossenen Vergabe ein **neues Verfahren** mit Begründung und neuer Kapazität eröffnen. Es verweist auf den letzten Abschluss desselben Betreuungstages. Frühere Ergebnisse und Bewegungen bleiben bestehen.
+1. Create a year under **Kita-Jahre** (Daycare years).
+2. Create groups and assign administrator accounts under **Gruppen & Admins** (Groups & admins). Under **Kinder & Familien** (Children & families), assign each child to a group and add contacts. Explicitly configure entitlement patterns and validity periods for Monday through Friday. For siblings or another daycare year, select an existing family in the same group. Multiple contacts are supported; each receives a separate link to the child's response form.
+3. Only after adding the initial children, create the **alphabetical initial list for each group**. Children are sorted by last name, then first name. New active children are appended afterward. Children who have left remain in the historical records and are skipped during allocation. Displayed positions refer to the full list, so gaps may appear when children who have left are hidden.
+4. Create an emergency daycare day with a capacity, optional care hours, and an optional response deadline. The allocation round stores a snapshot of the entitlement rules valid at that time for each active child.
+5. Maintain exactly one valid entitlement rule for each weekday. Individual care hours are not recorded; the entitlement applies to the care day.
+6. Select **Anfragen versenden** (Send requests). Parents indicate whether they need their regular place or a waiting-list place and can change their response until the deadline. Multiple contacts for the same child edit the same response; the last saved response applies. Authorized group administrators and system administrators can select **Rückmeldung erfassen** (Record response) or **Rückmeldung ändern** (Edit response) for a child in the allocation view and save on the parents' behalf. No personal parent link is required. The same business rules apply as in the parent form. Administrators can make corrections even after the deadline or after the response phase has closed, provided the allocation has not yet been confirmed as binding. The history records the administrator account and the previous and new values. Parents can still edit the response themselves while the response phase is open. This input remains blocked for children who have left or moved to another group, and for allocations that have been confirmed as binding. An administrator's correction does not reopen the response phase for parents.
+7. While the response phase is open, the deadline can be adjusted under **Rückmeldefrist ändern** (Change response deadline) in the allocation view, or removed by clearing the field. New deadlines must be in the future. Existing responses are retained, and changes are logged. Pending request and reminder emails receive the new deadline; messages already sent are not automatically resent. Closed allocation rounds are not reopened by this change. Review the responses and close the phase manually, including early closure when all responses are in. The scheduler automatically closes the phase when the deadline expires. Further edits by parents are blocked as soon as the deadline is reached.
+8. If an administrator changes a response or records a first response after calculation, the current proposal is preserved in the audit log and discarded. The proposal must then be recalculated and reviewed again. Saving an unchanged response does not discard a proposal. Previously opened confirmation pages cannot confirm a proposal that has since changed. Select **Vorschlag berechnen** (Calculate proposal) and review both phases and the list movements. Without a response, the regular entitlement remains in place. Demand for a waiting-list place must be explicitly reported.
+9. Confirm the complete proposal as binding using the confirmation checkbox (**verbindlich bestätigen**). Only this step saves the results, waiting-list movements, and email delivery requests. Repeated confirmations have no additional effect.
+10. If staffing changes, open a **new allocation round** from the completed allocation, providing a reason and a new capacity. It references the latest completed round for the same care day. Previous results and list movements are retained.
 
-## Fachliche und technische Entscheidungen
+## Business rules and technical decisions
 
-- Ein Kind erhält pro Verfahren höchstens einen Platz. Der Anspruch hängt von Wochentag, ISO-Kalenderwoche und Gültigkeit ab. Optionale Betreuungszeiten gelten für den gesamten Notbetreuungstag, nicht individuell je Kind.
-- Benötigte reguläre Ansprüche oberhalb der Kapazität blockieren die Berechnung mit einer Meldung. Die Anwendung erfindet keine Kürzungs- oder Prioritätsregel für diesen fachlich nicht festgelegten Fall. Vor einer Vergabe muss die Situation geklärt werden.
-- Phase 2 berücksichtigt die bestehende Reihenfolge. Nur tatsächlich zugeteilte und als benötigt gemeldete Nachrückplätze verschieben ein Kind ans Ende. Regulär freigegebene Plätze und bloße Anfragen verändern die Reihenfolge nicht. Nach regulären Ansprüchen und Warteliste übrige Plätze bleiben frei.
-- Ein Verfahren besitzt eigene Rückmeldungen und Anspruchssnapshots. Änderungen der Stammdaten wirken auf neu eröffnete Verfahren. Vorschläge merken sich die Revision der Gruppenwarteliste im Kita-Jahr. Änderungen an Kindern oder der Warteliste nach der Berechnung erfordern Verwerfen und Neuberechnen.
-- Alle konkurrierenden Änderungen von Kindern, Antworten und Wartelisten sowie Bestätigungen sperren zuerst das Kita-Jahr und anschließend das Verfahren. Positionen und Ergebnisse besitzen zusätzliche Unique Constraints. Eine Bestätigung ist eine Datenbanktransaktion; PostgreSQL/MySQL stellen dafür die Zeilensperren bereit.
-- Endgültige Ergebnisse stehen in `allocation_results`. Der unverbindliche Vorschlag und seine Eingabedaten stehen in `emergency_allocations.proposal`. Die Berechnung speichert ausschließlich Vorschlags- und Auditdaten und verändert weder finale Ergebnisse noch Wartelistenpositionen.
-- `waiting_list_movements` dokumentiert alle dadurch geänderten absoluten Positionen, einschließlich aufgerückter anderer Kinder. Nur die Phase-2-Gewinner werden tatsächlich ans Ende versetzt.
+- A child receives at most one place per allocation round. Entitlement depends on the weekday, ISO calendar week, and validity period. Optional care hours apply to the entire emergency daycare day rather than to individual children.
+- If required regular entitlements exceed capacity, calculation is blocked with a message. The application does not invent a reduction or priority rule for this case, for which no business rule has been defined. The situation must be resolved before allocation.
+- Phase 2 follows the existing waiting-list order. Only children actually awarded a waiting-list place they have requested are moved to the end. Releasing a regular place or merely requesting a place does not change the order. Any places remaining after regular entitlements and waiting-list allocation stay unfilled.
+- Each allocation round has its own responses and entitlement snapshots. Changes to master data apply to newly opened rounds. Proposals record the revision of the group's waiting list for the daycare year. Changes to children or the waiting list after calculation require the proposal to be discarded and recalculated.
+- All concurrent changes to children, responses, and waiting lists, as well as confirmations, lock the daycare year first and the allocation round second. Positions and results have additional unique constraints. Confirmation is a database transaction; PostgreSQL/MySQL provide the row-level locks.
+- Final results are stored in `allocation_results`. The non-binding proposal and its inputs are stored in `emergency_allocations.proposal`. Calculation saves only proposal and audit data; it changes neither final results nor waiting-list positions.
+- `waiting_list_movements` records all absolute positions changed by the allocation, including those of other children moving up. Only children awarded places in phase 2 are actually moved to the end.
 
-## E-Mail, Queue und Scheduler
+## Email, queue, and scheduler
 
-SMTP konfigurieren: `MAIL_MAILER=smtp`, `MAIL_SCHEME`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`. `MAIL_MAILER=log` schreibt lokal Nachrichten nach `storage/logs/laravel.log` (bei der Standardkonfiguration `LOG_CHANNEL=stack` und `LOG_STACK=single`) und versendet keine echten E-Mails. Auch für den Log-Mailer müssen Scheduler und Queue laufen: Der Scheduler übernimmt Versandaufträge aus der Outbox, die Queue verarbeitet sie anschließend. Nach dieser Verarbeitung wird der Auftrag als versendet markiert; beim Log-Mailer bedeutet das lediglich „protokolliert“. SMTP wurde ohne Zugangsdaten nicht gegen einen externen Dienst geprüft.
+Configure SMTP using `MAIL_MAILER=smtp`, `MAIL_SCHEME`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS`, and `MAIL_FROM_NAME`. `MAIL_MAILER=log` writes messages locally to `storage/logs/laravel.log` (with the default configuration of `LOG_CHANNEL=stack` and `LOG_STACK=single`) and does not send real emails. The scheduler and queue must run even with the log mailer: the scheduler picks up delivery requests from the outbox, and the queue then processes them. After processing, a request is marked as sent; with the log mailer, this only means "logged." SMTP has not been tested against an external service because credentials were unavailable.
 
 ```sh
 php artisan queue:work --tries=4 --timeout=45
 php artisan schedule:work
 ```
 
-Im Betrieb dauerhaft überwachten Queue-Worker verwenden und den Scheduler minütlich über `php artisan schedule:run` aufrufen. Bei Deployments `php artisan queue:restart` ausführen. Die Queue-Reservierungsdauer muss über dem Worker-Timeout liegen (Standard: 90 Sekunden).
+In production, use a continuously supervised queue worker and invoke the scheduler every minute with `php artisan schedule:run`. Run `php artisan queue:restart` during deployments. The queue reservation duration must exceed the worker timeout (default reservation duration: 90 seconds).
 
-Versandaufträge werden als transaktionale Outbox in `email_deliveries` gespeichert. Der Scheduler reiht offene Aufträge minütlich ein. Ein fehlender Worker oder ein SMTP-Fehler macht eine bestätigte Vergabe nicht rückgängig. Laravel Notifications werden innerhalb des Queue-Jobs versendet. Versandstatus, Versuchsanzahl und bereinigte Fehler sind in der Vergabeansicht sichtbar. Unique Jobs, Cache-Sperren, eindeutige Ergebnisaufträge und `sent_at` verhindern normale Doppelzustellung. Bei einem Prozessabbruch direkt nach SMTP-Annahme und vor Speicherung von `sent_at` ist eine erneute E-Mail technisch möglich; SMTP bietet keine transaktionale Exactly-once-Zusage.
+Delivery requests are stored in `email_deliveries` as a transactional outbox. The scheduler queues pending requests every minute. A missing worker or an SMTP error does not undo a confirmed allocation. Laravel Notifications are sent from within the queue job. Delivery status, attempt counts, and sanitized errors are visible in the allocation view. Unique jobs, cache locks, unique result delivery requests, and `sent_at` prevent duplicate delivery during normal operation. If a process terminates immediately after SMTP acceptance but before `sent_at` is saved, a duplicate email is technically possible; SMTP does not provide a transactional exactly-once guarantee.
 
 ```sh
-# Offene Aufträge sofort einreihen
+# Queue pending requests immediately
 php artisan careslot:send-pending
-# Nach Fehlerbehebung auch Aufträge mit vier erfolglosen Versuchen erneut einreihen
+# After fixing errors, also requeue requests with four failed attempts
 php artisan careslot:send-pending --retry
 php artisan queue:failed
 php artisan queue:retry all
 ```
 
-Einzelne Nachrichten können in der Versandübersicht ausdrücklich erneut vorgemerkt werden. Widerrufene oder abgelaufene Links sperren auch noch ausstehende Versandaufträge. Änderungen einer Kontakt-E-Mail oder der Familienzuordnung widerrufen die betroffenen bisherigen Links. Erneute Anfragen erzeugen neue persönliche Links; alte bleiben bis zum Ablauf oder ausdrücklichen Widerruf gültig. Erinnerungen werden nur für fehlende Antworten vorgemerkt. Verbindliche Ergebnisaufträge werden pro Kind/Kontakt/Verfahren genau einmal erstellt.
+Individual messages can be explicitly queued again in the delivery overview. Revoked or expired links also block pending delivery requests. Changes to a contact's email address or family assignment revoke the affected existing links. Sending requests again creates new personal links; old links remain valid until they expire or are explicitly revoked. Reminders are queued only for missing responses. Delivery requests for binding results are created exactly once per child/contact/allocation round.
 
-## Elternlinks und Datenschutz
+## Parent links and data protection
 
-Tokens bestehen aus 32 kryptografisch zufälligen Bytes, werden als 64 Hex-Zeichen versendet und in `personal_access_tokens` ausschließlich als SHA-256-Hash gespeichert. Jeder Token ist an eine Rückmeldung und einen Elternkontakt gebunden und kann einzeln widerrufen werden. Ablauf: 30 Tage nach dem Betreuungstag. Ein Elternformular zeigt nur die Daten dieses Kindes, keine anderen Familien oder Wartelistenpositionen. Geschlossene Verfahren erlauben ausschließlich lesenden Zugriff.
+Tokens consist of 32 cryptographically random bytes, are sent as 64 hexadecimal characters, and are stored in `personal_access_tokens` only as SHA-256 hashes. Each token is bound to a response and a parent contact and can be revoked individually. Tokens expire 30 days after the care day. A parent form shows only that child's data, without other families or waiting-list positions. Closed allocation rounds allow read-only access.
 
-Die Outbox muss den Link für den späteren Versand wiederherstellen können: Empfänger und Token werden deshalb zusammen als mit `APP_KEY` verschlüsselter Versandpayload gespeichert. Hashwerte/verschlüsselte Payloads werden bei Modellserialisierung ausgeblendet. `APP_KEY` sichern und vertraulich halten. Der Token selbst wird nicht in Audit-Einträge geschrieben. Die Elternseiten senden `Cache-Control: no-store`, `Referrer-Policy: no-referrer` und `X-Robots-Tag: noindex, nofollow`.
+The outbox must be able to reconstruct the link for later delivery, so the recipient and token are stored together in a delivery payload encrypted with `APP_KEY`. Hashes and encrypted payloads are hidden during model serialization. Back up `APP_KEY` and keep it confidential. The token itself is not written to audit entries. Parent pages send `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, and `X-Robots-Tag: noindex, nofollow`.
 
-Im Betrieb HTTPS, `APP_DEBUG=false`, sichere Session-Cookies (`SESSION_SECURE_COOKIE=true`) und verschlüsselte Sessions (`SESSION_ENCRYPT=true`) konfigurieren. Webserver/Proxy-Zugriffsprotokolle dürfen persönliche `/r/…`-URLs nicht ungeschützt aufzeichnen. Datenbank, Backups und Mail-/Queue-Protokolle enthalten personenbezogene Daten und gehören in einen zugriffsbeschränkten Betrieb. Keine echten Elterndaten in Demo-/Testdatenbanken übernehmen. Aufbewahrung und Löschung mit dem Träger festlegen; historische Vergaben werden nicht automatisch gelöscht.
+In production, configure HTTPS, `APP_DEBUG=false`, secure session cookies (`SESSION_SECURE_COOKIE=true`), and encrypted sessions (`SESSION_ENCRYPT=true`). Web server and proxy access logs must not record personal `/r/…` URLs without protection. The database, backups, and mail/queue logs contain personal data and require restricted access. Do not copy real parent data into demo or test databases. Agree on retention and deletion policies with the daycare operator; historical allocations are not deleted automatically.
 
-## Prüfung
+## Verification
 
 ```sh
 php artisan test --compact tests/Feature/EmergencyAllocationTest.php
@@ -91,19 +93,18 @@ vendor/bin/phpstan analyse --memory-limit=1G
 npm run build
 ```
 
-Die Fachtests prüfen die fünf Wochentage, ISO-Parität einschließlich Jahreswechsel, tagesbezogene Ansprüche, fehlende Antworten, alle Vergabephasen, Wartelistenstabilität, Snapshots, Neuzugänge, ausgeschiedene Kinder, neue Verfahren und idempotente Bestätigung. HTTP-/Livewire-Tests prüfen Anmeldung, Rollen, fremde Kind-IDs, Tokenablauf/-widerruf, Fristen, Formulare, Versand und Fehlversuche. Tests nutzen eine isolierte SQLite-In-Memory-Datenbank. Echte parallele Bestätigungen und Sperrverhalten müssen zusätzlich im PostgreSQL-/MySQL-Zielsystem geprüft werden.
+Business rule tests cover all five weekdays, ISO week parity including year boundaries, day-based entitlements, missing responses, all allocation phases, waiting-list stability, snapshots, newly added children, children who have left, new allocation rounds, and idempotent confirmation. HTTP/Livewire tests cover sign-in, roles, attempts to access unauthorized child IDs, token expiry and revocation, deadlines, forms, delivery, and failed attempts. Tests use an isolated SQLite in-memory database. Actual concurrent confirmations and locking behavior must also be tested on the target PostgreSQL/MySQL system.
 
-## Optionale Demodaten
+## Optional demo data
 
-Nur lokal und mit fiktiven Kontakten: `php artisan db:seed --class=DemoSeeder --no-interaction`. Dies erzeugt ein Demo-Jahr, sechs Kinder mit fünf Tagesregeln, eine Warteliste, ein offenes Verfahren mit Beispielantworten und einen unverbindlichen Vergabevorschlag für einen weiteren Tag. Die Regeln enthalten gerade/ungerade Wochen und tägliche Ansprüche ohne individuelle Uhrzeiten. Der Vorschlag zeigt beide Vergabephasen. Es werden weder E-Mails versendet noch Administratorkonten erstellt. Wiederholung legt das Demo-Jahr nicht doppelt an; im Produktionsmodus wird der Seeder verweigert.
+For local use only, with fictional contacts: `php artisan db:seed --class=DemoSeeder --no-interaction`. This creates a demo year, six children with five weekday rules each, a waiting list, an open allocation round with sample responses, and a non-binding allocation proposal for another day. The rules include even/odd weeks and day-based entitlements without individual care hours. The proposal demonstrates both allocation phases. No emails are sent and no administrator accounts are created. Running the seeder again does not duplicate the demo year; it refuses to run in production mode.
 
+## Groups and access permissions
 
-## Gruppen und Zugriffsrechte
+No group is created automatically. Before adding children, explicitly create a group under **Gruppen & Admins** (Groups & admins). Existing administrator accounts without a group assignment retain system-wide access and can manage groups and daycare years. Under **Gruppen & Admins**, these accounts can create and rename groups, create group administrator accounts, and assign existing accounts as group administrators. The last account with system-wide access is preserved.
 
-Es gibt keine automatisch angelegte Gruppe. Vor der Kinderaufnahme wird eine Gruppe ausdrücklich unter **Gruppen & Admins** erstellt. Vorhandene Administratorkonten ohne Gruppenzuordnung behalten Gesamtzugriff und können Gruppen sowie Kita-Jahre verwalten. Unter **Gruppen & Admins** können diese Konten Gruppen erstellen, umbenennen, Gruppenadmins anlegen und bestehende Konten als Gruppenadmins zuordnen. Das letzte Konto mit Gesamtzugriff bleibt erhalten.
+Create new group administrators with `php artisan careslot:admin gruppe@example.org --group=GRUPPEN-ID`, replacing the group ID placeholder with the actual ID. Each group administrator account manages exactly one group. Omitting `--group` creates an account with system-wide access. Group administrators can manage their group's children, contacts, waiting lists, allocations, delivery requests, and history. Records outside their group remain inaccessible, including through direct requests or manipulated form/Livewire data. Shared daycare years can only be created or archived by system administrators.
 
-Neue Gruppenadmins werden mit `php artisan careslot:admin gruppe@example.org --group=GRUPPEN-ID` angelegt. Jedes Gruppenadminkonto verwaltet genau eine Gruppe. Ohne `--group` wird ein Konto mit Gesamtzugriff erstellt. Gruppenadmins können ihre Kinder, Kontakte, Wartelisten, Vergaben, Versandaufträge und gruppenbezogene Historie verwalten. Fremde Datensätze sind auch bei direkten Aufrufen oder manipulierten Formular-/Livewire-Daten gesperrt. Gemeinsame Kita-Jahre werden nur durch die Gesamtverwaltung angelegt oder archiviert.
+Each group has its own alphabetical initial list and rotation for each daycare year. Only system administrators can move a child to another group. If the destination waiting list has been initialized, the child is appended to it; old parent links are revoked, and previous results are retained. Families and contacts are managed per group.
 
-Jede Gruppe hat pro Kita-Jahr eine eigene alphabetische Grundliste und Rotation. Gruppenwechsel eines Kindes erfolgen durch die Gesamtverwaltung. Das Kind wird bei initialisierter Zielwarteliste angehängt; alte Elternlinks werden widerrufen und frühere Ergebnisse bleiben erhalten. Familien und Kontakte werden pro Gruppe verwaltet.
-
-Die Migration zur Entfernung individueller Kinderzeiten bewahrt bestätigte Ergebnisse und ihre historischen Snapshots. Offene Vorschläge werden im Audit gesichert und verworfen; danach ist eine Neuberechnung erforderlich. Die neuen Gruppen- und Zeitmigrationen haben keinen verlustfreien automatischen Rollback. Im Betrieb Vorwärtsmigrationen beziehungsweise ein geprüftes Datenbankbackup verwenden.
+The migration that removes individual child care hours preserves confirmed results and their historical snapshots. Pending proposals are preserved in the audit log and discarded; recalculation is then required. The new group and care-hours migrations do not support an automatic rollback without data loss. In production, use forward migrations or restore from a verified database backup.

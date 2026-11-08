@@ -18,7 +18,14 @@ class CareGroupController extends Controller
 
     public function index(): View
     {
-        return view('admin.groups', ['groups' => CareGroup::with('administrators')->withCount('children')->orderBy('name')->get(), 'users' => User::orderBy('name')->get()]);
+        $users = User::orderBy('name')->orderBy('id')->get();
+
+        return view('admin.groups', [
+            'groups' => CareGroup::withCount('children')->orderBy('name')->get(),
+            'systemAdministrators' => $users->filter(fn (User $user): bool => $user->isSystemAdministrator()),
+            'usersByGroup' => $users->whereNotNull('group_id')->groupBy('group_id'),
+            'unassignedUsers' => $users->whereNull('group_id')->where('is_admin', false),
+        ]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -46,16 +53,16 @@ class CareGroupController extends Controller
 
     public function storeAdministrator(Request $request): RedirectResponse
     {
-        $data = $request->validate(['name' => ['required', 'string', 'max:150'], 'email' => ['required', 'email', 'max:255', 'unique:users,email'], 'password' => ['required', 'string', 'min:12', 'confirmed'], 'group_id' => ['required', 'integer', 'exists:care_groups,id']]);
+        $data = $request->validate(['name' => ['required', 'string', 'max:150'], 'email' => ['required', 'email', 'max:255', 'unique:users,email'], 'password' => ['required', 'string', 'min:12', 'confirmed'], 'group_id' => ['nullable', 'integer', 'exists:care_groups,id']]);
         DB::transaction(function () use ($data): void {
             $user = new User(['name' => $data['name'], 'email' => $data['email'], 'password' => $data['password']]);
             $user->is_admin = true;
-            $user->group_id = (int) $data['group_id'];
+            $user->group_id = isset($data['group_id']) ? (int) $data['group_id'] : null;
             $user->save();
             $this->audit->record('group.administrator_created', $user, ['name' => $user->name, 'email' => $user->email, 'group_id' => $user->group_id]);
         });
 
-        return back()->with('success', 'Gruppenadmin angelegt.');
+        return back()->with('success', 'Admin angelegt.');
     }
 
     public function assignAdministrator(Request $request): RedirectResponse

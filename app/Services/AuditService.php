@@ -16,6 +16,10 @@ class AuditService
     /** @param array<string, mixed> $data */
     public function record(string $event, Model $subject, array $data = []): void
     {
+        if (session()->has('impersonator_id')) {
+            $data['impersonator_id'] = session('impersonator_id');
+        }
+
         $groupId = match (true) {
             $subject instanceof EmergencyAllocation => $subject->emergencyDay->group_id,
             $subject instanceof EmergencyResponse => $subject->allocation->emergencyDay->group_id,

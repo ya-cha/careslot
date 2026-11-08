@@ -41,7 +41,7 @@
                 <x-side-bar.separator text="Organisation" />
                 <x-side-bar.item text="Kita-Jahre" icon="calendar" :route="route('years.index')" :current="request()->routeIs('years.*')" />
                 @can('manage-groups')
-                    <x-side-bar.item text="Gruppen & Admins" icon="building-office-2" :route="route('groups.index')" :current="request()->routeIs('groups.*')" />
+                    <x-side-bar.item text="Gruppen & Admins" icon="building-office-2" :route="route('groups.index')" :current="request()->routeIs('groups.*', 'users.*')" />
                 @endcan
                 <x-side-bar.item text="Historie" icon="clock" :route="route('history')" :current="request()->routeIs('history')" />
                 <x-slot:footer>
@@ -60,6 +60,7 @@
             </x-side-bar>
         </x-slot:menu>
         <div id="main-content" class="mx-auto max-w-[1440px] min-w-0">
+            @include('layouts.impersonation')
             @include('layouts.feedback')
             @yield('content')
         </div>
@@ -73,6 +74,7 @@
             </div>
         </header>
         <main id="main-content" class="mx-auto max-w-2xl px-5 py-10 sm:py-16">
+            @include('layouts.impersonation')
             @include('layouts.feedback')
             @yield('content')
         </main>

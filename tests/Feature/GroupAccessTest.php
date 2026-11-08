@@ -274,6 +274,10 @@ it('preserves confirmed historical results when migrating removed child hours', 
         $table->time('ends_at')->nullable();
     });
     Schema::table('emergency_responses', fn (Blueprint $table) => $table->json('time_resolution')->nullable());
+    Schema::create('lottery_draws', function (Blueprint $table): void {
+        $table->id();
+        $table->foreignId('emergency_allocation_id')->constrained();
+    });
     $migration = require database_path('migrations/2026_10_29_211538_remove_individual_care_times.php');
 
     $migration->up();

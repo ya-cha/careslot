@@ -16,6 +16,6 @@ class EmergencyDayRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        return ['group_id' => ['required', Rule::exists('care_groups', 'id')->when($this->user()?->group_id !== null, fn ($rule) => $rule->where('id', $this->user()->group_id))], 'kita_year_id' => ['required', 'exists:kita_years,id'], 'date' => ['required', 'date'], 'capacity' => ['required', 'integer', 'min:0', 'max:10000'], 'starts_at' => ['nullable', 'required_with:ends_at', 'date_format:H:i'], 'ends_at' => ['nullable', 'required_with:starts_at', 'date_format:H:i', 'after:starts_at'], 'response_deadline' => ['nullable', 'date', 'after:now']];
+        return ['group_id' => ['required', Rule::exists('care_groups', 'id')->when($this->user()?->group_id !== null, fn ($rule) => $rule->where('id', $this->user()->group_id))], 'kita_year_id' => ['required', 'exists:kita_years,id'], 'date' => ['required', 'date'], 'capacity' => ['required', 'integer', 'min:0', 'max:10000'], 'starts_at' => ['nullable', 'date_format:H:i'], 'ends_at' => ['nullable', 'date_format:H:i', Rule::when($this->filled('starts_at'), ['after:starts_at'])], 'response_deadline' => ['nullable', 'date', 'after:now']];
     }
 }

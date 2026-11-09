@@ -15,7 +15,7 @@
             <span class="grid size-11 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-600"><x-icon icon="calendar-days" class="size-6" /></span>
             <div>
                 <h2>Notbetreuung am {{ $allocation->emergencyDay->date->format('d.m.Y') }}</h2>
-                <p class="muted">Angebotene Betreuung: {{ $allocation->emergencyDay->starts_at ? substr($allocation->emergencyDay->starts_at,0,5).'–'.substr($allocation->emergencyDay->ends_at,0,5).' Uhr' : 'Zeitraum wird durch den Administrator geklärt' }}.</p>
+                <p class="muted">{{ $allocation->emergencyDay->careTimeLabel() }}.</p>
                 <p class="muted">{{ $unresolved ? 'Anspruchsregeln fehlen oder sind widersprüchlich.' : ($regular ? 'Regulärer Anspruch für diesen Betreuungstag.' : 'Kein regulärer Anspruch für diesen Betreuungstag.') }}</p>
                 @if($allocation->response_deadline)<p class="mt-4 text-xs font-medium text-gray-600">Rückmeldefrist: {{ $allocation->response_deadline->format('d.m.Y H:i') }} Uhr (Europe/Berlin)</p>@endif
             </div>
@@ -27,7 +27,7 @@
     <x-card bordered shadowless>
         <h2>{{ $result?->awarded ? 'Ein Platz für '.$response->child->first_name.'.' : 'In diesem Verfahren wurde kein Platz vergeben.' }}</h2>
         <p class="muted">{{ $result?->reason }}</p>
-        @if($result?->awarded)<p class="mt-4 text-sm">Betreuungszeit: {{ $allocation->emergencyDay->starts_at ? substr($allocation->emergencyDay->starts_at,0,5).'–'.substr($allocation->emergencyDay->ends_at,0,5).' Uhr' : 'Nicht angegeben' }}</p>@endif
+        @if($result?->awarded)<p class="mt-4 text-sm">{{ $allocation->emergencyDay->careTimeLabel() }}</p>@endif
     </x-card>
 @elseif($closed)
     <x-alert color="indigo" light icon="lock-closed" title="Die Rückmeldungsphase ist geschlossen." text="Ihre Angaben sind gespeichert. Sobald der Administrator die Vergabe bestätigt hat, erhalten Sie das verbindliche Ergebnis per E-Mail." />

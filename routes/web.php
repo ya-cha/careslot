@@ -4,6 +4,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CareAdminController;
 use App\Http\Controllers\CareGroupController;
 use App\Http\Controllers\ImpersonationController;
+use App\Http\Controllers\MailLogController;
 use App\Http\Controllers\ParentResponseController;
 use App\Http\Controllers\UserController;
 use App\Http\Middleware\PrivateCareResponse;
@@ -23,6 +24,11 @@ Route::get('/r/{token}', [ParentResponseController::class, 'show'])->middleware(
 Route::post('/r/{token}', [ParentResponseController::class, 'update'])->middleware(['throttle:20,1', PrivateCareResponse::class])->name('parent.update');
 
 Route::middleware(['auth', 'can:viewAny,'.EmergencyAllocation::class])->group(function (): void {
+    Route::middleware(['can:view-mail-logs', PrivateCareResponse::class])->group(function (): void {
+        Route::get('/mailprotokoll', [MailLogController::class, 'index'])->name('mail-logs.index');
+        Route::get('/mailprotokoll/{mailLog}', [MailLogController::class, 'show'])->name('mail-logs.show');
+        Route::get('/mailprotokoll/{mailLog}/inhalt', [MailLogController::class, 'content'])->name('mail-logs.content');
+    });
     Route::middleware('can:manage-groups')->group(function (): void {
         Route::get('/gruppen', [CareGroupController::class, 'index'])->name('groups.index');
         Route::post('/gruppen', [CareGroupController::class, 'store'])->name('groups.store');
@@ -49,10 +55,12 @@ Route::middleware(['auth', 'can:viewAny,'.EmergencyAllocation::class])->group(fu
     Route::post('/notbetreuung', [CareAdminController::class, 'storeDay'])->name('days.store');
     Route::get('/vergaben/{allocation}', [CareAdminController::class, 'show'])->name('allocations.show');
     Route::put('/vergaben/{allocation}/rueckmeldefrist', [CareAdminController::class, 'updateDeadline'])->name('allocations.deadline.update');
+    Route::post('/vergaben/{allocation}/wiedereroeffnen', [CareAdminController::class, 'reopenResponses'])->name('allocations.responses.reopen');
     Route::post('/vergaben/{allocation}/aktion', [CareAdminController::class, 'action'])->name('allocations.action');
     Route::post('/vergaben/{allocation}/neu', [CareAdminController::class, 'restart'])->name('allocations.restart');
     Route::put('/rueckmeldungen/{response}', [CareAdminController::class, 'updateResponse'])->name('responses.admin.update');
     Route::post('/elternlinks/{token}/widerrufen', [CareAdminController::class, 'revoke'])->name('tokens.revoke');
+    Route::get('/elternlinks/{token}/kopieren', [CareAdminController::class, 'copyLink'])->name('tokens.copy');
     Route::post('/versand/{delivery}/erneut', [CareAdminController::class, 'resend'])->name('mail.resend');
     Route::get('/historie', [CareAdminController::class, 'history'])->name('history');
 });

@@ -5,7 +5,10 @@ use App\Models\KitaYear;
 use App\Models\WaitingListEntry;
 use App\Services\GroupAccessService;
 use App\Services\WaitingListService;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
@@ -64,6 +67,40 @@ new class extends Component {
         $this->resetValidation();
     }
 
+    public function sortEntry(int $entryId, int $position): void
+    {
+        $entry = $this->selectedEntry($entryId);
+        $this->cancelEdit();
+
+        DB::transaction(function () use ($entry, $position): void {
+            KitaYear::whereKey($entry->kita_year_id)->lockForUpdate()->firstOrFail();
+            $visibleEntries = $this->entriesQuery()->get();
+            abort_unless($visibleEntries->contains('id', $entry->id), 404);
+            if ($position < 0 || $position >= $visibleEntries->count()) {
+                throw ValidationException::withMessages(['position' => 'Die Zielposition ist nicht mehr verfügbar. Bitte erneut versuchen.']);
+            }
+
+            $target = $visibleEntries[$position];
+            $fullPosition = WaitingListEntry::where('kita_year_id', $entry->kita_year_id)
+                ->where('group_id', $entry->group_id)->where('position', '<=', $target->position)->count();
+            app(WaitingListService::class)->move($entry, $fullPosition, app(GroupAccessService::class)->user());
+        });
+
+        $this->positionSaved = true;
+    }
+
+    /** @return Builder<WaitingListEntry> */
+    private function entriesQuery(): Builder
+    {
+        $search = mb_substr($this->search, 0, 100);
+
+        return WaitingListEntry::where('kita_year_id', $this->yearId)->where('group_id', $this->groupId)
+            ->with('child')->whereHas('child', fn ($query) => $query->where('active', true)
+                ->when($search !== '', fn ($query) => $query->where(fn ($query) => $query
+                    ->where('first_name', 'like', '%'.$search.'%')->orWhere('last_name', 'like', '%'.$search.'%'))))
+            ->orderBy('position');
+    }
+
     private function selectedEntry(int $entryId): WaitingListEntry
     {
         Gate::authorize('viewAny', EmergencyAllocation::class);
@@ -79,9 +116,8 @@ new class extends Component {
         if ($this->groupId !== '') { $access->authorize((int) $this->groupId); }
         $year = $this->yearId !== '' ? KitaYear::findOrFail($this->yearId) : null;
         $list = $year && $this->groupId !== '' ? \App\Models\GroupYear::where('kita_year_id', $year->id)->where('group_id', $this->groupId)->first() : null;
-        $search = mb_substr($this->search, 0, 100);
 
-        return $this->view(['groups' => $access->groups(), 'list' => $list, 'years' => KitaYear::orderByDesc('starts_on')->get(), 'year' => $year, 'totalEntries' => $year && $this->groupId !== '' ? $year->waitingListEntries()->where('group_id', $this->groupId)->count() : 0, 'entries' => $year && $this->groupId !== '' ? $year->waitingListEntries()->where('group_id', $this->groupId)->with('child')->whereHas('child', fn ($query) => $query->where('active', true)->when($search !== '', fn ($query) => $query->where(fn ($query) => $query->where('first_name', 'like', '%'.$search.'%')->orWhere('last_name', 'like', '%'.$search.'%'))))->orderBy('position')->get() : collect()]);
+        return $this->view(['groups' => $access->groups(), 'list' => $list, 'years' => KitaYear::orderByDesc('starts_on')->get(), 'year' => $year, 'totalEntries' => $year && $this->groupId !== '' ? $year->waitingListEntries()->where('group_id', $this->groupId)->count() : 0, 'entries' => $year && $this->groupId !== '' ? $this->entriesQuery()->get() : collect()]);
     }
 };
 ?>
@@ -109,48 +145,64 @@ new class extends Component {
     </x-card>
     <x-card bordered shadowless paddingless>
         <x-slot:header>
-            <div><h2>Aktuelle Reihenfolge</h2><p class="muted">Sie können die Positionen jederzeit ändern. Bestätigte Nachrückplätze verschieben ein Kind automatisch ans Listenende.</p></div>
+            <div><h2>Aktuelle Reihenfolge</h2><p class="muted">Ziehen Sie ein Kind am Griff auf die gewünschte Position. Die Reihenfolge wird sofort gespeichert. Zum Eingeben einer Position klicken Sie auf den Griff. Bestätigte Nachrückplätze verschieben ein Kind automatisch ans Listenende.</p></div>
             <x-badge color="indigo" light>{{ $entries->count() }} aktive Einträge</x-badge>
         </x-slot:header>
         <div role="status" wire:loading class="px-6 pt-4 text-sm text-indigo-600">Liste wird geladen …</div>
-        <x-table :headers="[
-            ['index' => 'position', 'label' => 'Position'],
-            ['index' => 'child', 'label' => 'Kind'],
-            ['index' => 'status', 'label' => 'Status'],
-            ['index' => 'action', 'label' => ''],
-        ]" :rows="$entries" :sort="[]" loading>
-            @interact('column_position', $entry)
-                <span class="position">{{ $entry->position }}</span>
-            @endinteract
-            @interact('column_child', $entry)
-                <span class="font-semibold">{{ $entry->child->first_name }} {{ $entry->child->last_name }}</span>
-            @endinteract
-            @interact('column_status', $entry)
-                <x-badge color="indigo" light text="Aktiv" />
-            @endinteract
-            @interact('column_action', $entry, $editingEntryId, $totalEntries)
-                @if($editingEntryId === $entry->id)
-                    <form wire:submit="savePosition" wire:key="position-editor-{{ $entry->id }}" class="min-w-48 space-y-3">
-                        <x-input label="Neue Position" aria-label="Neue Position für {{ $entry->child->first_name }} {{ $entry->child->last_name }}" type="number" min="1" :max="$totalEntries" wire:model="position" required />
-                        <div class="flex gap-2">
-                            <x-button submit sm text="Speichern" wire:loading.attr="disabled" />
-                            <x-button color="gray" flat sm text="Abbrechen" wire:click="cancelEdit" />
-                        </div>
-                    </form>
-                @else
-                    <div class="flex flex-wrap justify-end gap-2">
-                        <x-button color="gray" outline sm text="Position ändern" wire:click="editPosition({{ $entry->id }})" />
-                        <x-button :href="route('children.edit', $entry->child)" flat sm text="Stammdaten" icon="arrow-up-right" position="right" />
-                    </div>
-                @endif
-            @endinteract
-            <x-slot:empty>
-                <div class="py-8 text-center">
-                    <x-icon icon="queue-list" class="mx-auto mb-3 size-9 text-gray-300" />
-                    <p class="text-sm text-gray-500">{{ $year && !$list?->waiting_list_initialized_at ? 'Zuerst Kinder erfassen und unter Kita-Jahre die Grundliste erstellen.' : 'Keine passenden Kinder gefunden.' }}</p>
-                </div>
-            </x-slot:empty>
-        </x-table>
+        @error('position')
+            <p role="alert" class="px-6 pt-4 text-sm text-red-600">{{ $message }}</p>
+        @enderror
+        <div class="overflow-x-auto" wire:loading.class="pointer-events-none opacity-50" wire:loading.attr="inert">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th scope="col"><span class="sr-only">Reihenfolge ändern</span></th>
+                        <th scope="col">Position</th>
+                        <th scope="col">Kind</th>
+                        <th scope="col">Status</th>
+                        <th scope="col"><span class="sr-only">Aktionen</span></th>
+                    </tr>
+                </thead>
+                <tbody wire:sort="sortEntry" wire:key="waiting-list-{{ $groupId }}-{{ $yearId }}-{{ md5($search) }}">
+                    @forelse($entries as $entry)
+                        <tr wire:sort:item="{{ $entry->id }}" wire:key="waiting-entry-{{ $entry->id }}">
+                            <td class="w-12">
+                                <button type="button" wire:sort:handle wire:click="editPosition({{ $entry->id }})" wire:loading.attr="disabled"
+                                    class="inline-flex size-9 touch-none cursor-grab items-center justify-center rounded-lg text-gray-400 hover:bg-indigo-50 hover:text-indigo-700 active:cursor-grabbing"
+                                    aria-label="Position für {{ $entry->child->first_name }} {{ $entry->child->last_name }} ändern" title="Ziehen zum Verschieben, klicken zur Positionseingabe">
+                                    <x-icon icon="bars-3" class="size-5" />
+                                </button>
+                            </td>
+                            <td><span class="position">{{ $entry->position }}</span></td>
+                            <td><span class="font-semibold">{{ $entry->child->first_name }} {{ $entry->child->last_name }}</span></td>
+                            <td><x-badge color="indigo" light text="Aktiv" /></td>
+                            <td wire:sort:ignore>
+                                @if($editingEntryId === $entry->id)
+                                    <form wire:submit="savePosition" wire:key="position-editor-{{ $entry->id }}" class="min-w-48 space-y-3">
+                                        <x-input label="Neue Position" aria-label="Neue Position für {{ $entry->child->first_name }} {{ $entry->child->last_name }}" type="number" min="1" :max="$totalEntries" wire:model="position" required />
+                                        <div class="flex gap-2">
+                                            <x-button submit sm text="Speichern" wire:loading.attr="disabled" />
+                                            <x-button color="gray" flat sm text="Abbrechen" wire:click="cancelEdit" />
+                                        </div>
+                                    </form>
+                                @else
+                                    <div class="flex flex-wrap justify-end gap-2">
+                                        <x-button :href="route('children.edit', $entry->child)" flat sm text="Stammdaten" icon="arrow-up-right" position="right" />
+                                    </div>
+                                @endif
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="5">
+                            <div class="py-8 text-center">
+                                <x-icon icon="queue-list" class="mx-auto mb-3 size-9 text-gray-300" />
+                                <p class="text-sm text-gray-500">{{ $year && !$list?->waiting_list_initialized_at ? 'Zuerst Kinder erfassen und unter Kita-Jahre die Grundliste erstellen.' : 'Keine passenden Kinder gefunden.' }}</p>
+                            </div>
+                        </td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
         <x-slot:footer unwrapped>
             <p class="text-xs leading-relaxed text-gray-500">Positionen beziehen sich auch bei aktiver Suche auf die vollständige Liste einschließlich ausgeschiedener Kinder. Beim Ändern werden die Positionen fortlaufend nummeriert. Änderungen werden in der Historie protokolliert; bereits berechnete Vergabevorschläge müssen danach neu berechnet werden.</p>
         </x-slot:footer>

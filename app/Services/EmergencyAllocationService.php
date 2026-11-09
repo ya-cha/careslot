@@ -57,13 +57,45 @@ class EmergencyAllocationService
             }
             $before = $allocation->response_deadline?->toIso8601String();
             $allocation->update(['response_deadline' => $newDeadline]);
-            foreach (EmailDelivery::where('emergency_allocation_id', $allocation->id)->whereNull('sent_at')->whereIn('kind', ['request', 'reminder'])->get() as $delivery) {
-                $payload = $delivery->payload;
-                $payload['deadline'] = $allocation->response_deadline?->format('d.m.Y H:i');
-                $delivery->update(['payload' => $payload]);
-            }
+            $this->updatePendingDeadlines($allocation);
             $this->audit->record('responses.deadline_updated', $allocation, ['before' => $before, 'after' => $allocation->response_deadline?->toIso8601String()]);
         });
+    }
+
+    public function reopenResponses(EmergencyAllocation $allocation, ?string $deadline, User $administrator): void
+    {
+        abort_unless($administrator->managesGroup($allocation->emergencyDay->group_id), 404);
+
+        DB::transaction(function () use ($allocation, $deadline): void {
+            $allocation = $this->locked($allocation);
+            $expired = $allocation->status === 'responses' && $allocation->response_deadline !== null && $allocation->response_deadline->lte(now());
+            if (! in_array($allocation->status, ['closed', 'proposed'], true) && ! $expired) {
+                $this->fail($allocation->status === 'confirmed'
+                    ? 'Die Vergabe ist bereits bestätigt. Änderungen erfordern ein neues Verfahren.'
+                    : 'Die Rückmeldungsphase ist bereits offen.');
+            }
+            $newDeadline = $deadline !== null ? Date::parse($deadline) : null;
+            if ($newDeadline !== null && $newDeadline->lte(now())) {
+                throw ValidationException::withMessages(['response_deadline' => 'Die Rückmeldefrist muss in der Zukunft liegen.']);
+            }
+            $before = ['status' => $allocation->status, 'response_deadline' => $allocation->response_deadline?->toIso8601String(), 'responses_closed_at' => $allocation->responses_closed_at?->toIso8601String()];
+            $proposalDiscarded = $allocation->status === 'proposed';
+            if ($proposalDiscarded) {
+                $this->discard($allocation, reason: 'Rückmeldungsphase wieder eröffnet.');
+            }
+            $allocation->update(['status' => 'responses', 'response_deadline' => $newDeadline, 'responses_closed_at' => null, 'proposal' => null, 'source_revision' => null, 'calculated_at' => null]);
+            $this->updatePendingDeadlines($allocation);
+            $this->audit->record('responses.reopened', $allocation, ['before' => $before, 'response_deadline' => $allocation->response_deadline?->toIso8601String(), 'proposal_discarded' => $proposalDiscarded]);
+        });
+    }
+
+    private function updatePendingDeadlines(EmergencyAllocation $allocation): void
+    {
+        foreach (EmailDelivery::where('emergency_allocation_id', $allocation->id)->whereNull('sent_at')->whereIn('kind', ['request', 'reminder'])->get() as $delivery) {
+            $payload = $delivery->payload;
+            $payload['deadline'] = $allocation->response_deadline?->format('d.m.Y H:i');
+            $delivery->update(['payload' => $payload]);
+        }
     }
 
     public function close(EmergencyAllocation $allocation, bool $onlyIfExpired = false): void

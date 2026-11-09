@@ -55,6 +55,6 @@ class CareCommunicationService
         }
         $plainToken = bin2hex(random_bytes(32));
         PersonalAccessToken::create(['emergency_response_id' => $response->id, 'parent_contact_id' => $contactId, 'token_hash' => hash('sha256', $plainToken), 'expires_at' => $allocation->emergencyDay->date->endOfDay()->addDays(30)]);
-        EmailDelivery::create(['emergency_allocation_id' => $allocation->id, 'parent_contact_id' => $contactId, 'deduplication_key' => $key, 'kind' => $kind, 'payload' => ['email' => $email, 'token' => $plainToken, 'child_name' => $response->child->first_name.' '.$response->child->last_name, 'date' => $allocation->emergencyDay->date->format('d.m.Y'), 'deadline' => $allocation->response_deadline?->format('d.m.Y H:i'), 'awarded' => $awarded, 'care' => $response->claim_snapshot]]);
+        EmailDelivery::create(['emergency_allocation_id' => $allocation->id, 'parent_contact_id' => $contactId, 'deduplication_key' => $key, 'kind' => $kind, 'payload' => ['email' => $email, 'token' => $plainToken, 'child_name' => $response->child->first_name.' '.$response->child->last_name, 'date' => $allocation->emergencyDay->date->format('d.m.Y'), 'deadline' => $allocation->response_deadline?->format('d.m.Y H:i'), 'awarded' => $awarded, 'care' => $response->claim_snapshot, 'care_time' => $allocation->emergencyDay->careTimeLabel()]]);
     }
 }

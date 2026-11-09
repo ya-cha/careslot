@@ -2,10 +2,11 @@
 @section('title', 'Vergabe #'.$allocation->id)
 @section('content')
 @php($statusLabels = ['responses'=>'Rückmeldungen offen','closed'=>'Rückmeldungen geschlossen','proposed'=>'Unverbindlicher Vorschlag','confirmed'=>'Verbindlich abgeschlossen'])
-<div class="page-heading"><div><p class="eyebrow">{{ $allocation->emergencyDay->group->name }} · {{ $allocation->emergencyDay->kitaYear->name }} · Verfahren #{{ $allocation->id }}</p><h1>{{ $allocation->emergencyDay->date->translatedFormat('l, d. F Y') }}</h1><p class="muted">{{ $allocation->emergencyDay->starts_at ? substr($allocation->emergencyDay->starts_at,0,5).'–'.substr($allocation->emergencyDay->ends_at,0,5).' Uhr' : 'Kein Betreuungszeitraum festgelegt' }} · {{ $allocation->capacity }} Plätze · {{ $statusLabels[$allocation->status] }}</p></div><x-button color="gray" outline href="{{ route('dashboard') }}">Zur Übersicht</x-button></div>
+@php($responsesExpired = $allocation->status === 'responses' && $allocation->response_deadline && $allocation->response_deadline->lte(now()))
+<div class="page-heading"><div><p class="eyebrow">{{ $allocation->emergencyDay->group->name }} · {{ $allocation->emergencyDay->kitaYear->name }} · Verfahren #{{ $allocation->id }}</p><h1>{{ $allocation->emergencyDay->date->translatedFormat('l, d. F Y') }}</h1><p class="muted">{{ $allocation->emergencyDay->careTimeLabel() }} · {{ $allocation->capacity }} Plätze · {{ $responsesExpired ? 'Rückmeldefrist abgelaufen' : $statusLabels[$allocation->status] }}</p></div><x-button color="gray" outline href="{{ route('dashboard') }}">Zur Übersicht</x-button></div>
 @if($allocation->previous_allocation_id)<div class="mb-6"><x-card bordered shadowless><p class="text-sm">Folgeverfahren zu <x-button flat sm href="{{ route('allocations.show', $allocation->previous_allocation_id) }}">#{{ $allocation->previous_allocation_id }}</x-button>: {{ $allocation->reason }}</p></x-card></div>@endif
 <div class="mb-6 grid gap-4 md:grid-cols-4">@foreach(['Kapazität'=>$allocation->capacity,'Antworten'=>$allocation->responses->whereNotNull('responded_at')->count().' / '.$allocation->responses->count(),'Fehlende Antworten'=>$allocation->responses->whereNull('responded_at')->count(),'Rückmeldefrist'=>$allocation->response_deadline?->format('d.m.Y H:i') ?? 'Manueller Abschluss'] as $title=>$value)<div><x-card bordered shadowless><p class="text-xs text-gray-500">{{ $title }}</p><p class="mt-3 text-xl font-semibold">{{ $value }}</p></x-card></div>@endforeach</div>
-@if($allocation->status === 'responses')
+@if($allocation->status === 'responses' && !$responsesExpired)
 <div class="mb-6"><x-card bordered shadowless><form  method="POST" action="{{ route('allocations.deadline.update', $allocation) }}">
     @csrf @method('PUT')
     <h2>Rückmeldefrist ändern</h2>
@@ -16,6 +17,24 @@
     <p class="muted !text-xs">Alle Uhrzeiten: Europe/Berlin. Ein leeres Feld entfernt die Frist; die Phase wird dann manuell geschlossen. Bereits versendete E-Mails werden nicht automatisch erneut versendet. Bei Bedarf können Sie die Anfragen erneut senden.</p>
 </form></x-card></div>
 <div class="mb-6"><x-card bordered shadowless><h2>Rückmeldungsphase</h2><p class="muted mb-5">Eltern geben ihren regulären Bedarf oder Nachrückbedarf an. Fehlende Antworten lassen den regulären Anspruch bestehen.</p><div class="flex flex-wrap gap-3">@foreach(['request'=>'Anfragen versenden / erneut senden','remind'=>'Fehlende Antworten erinnern','close'=>'Rückmeldungsphase schließen'] as $action=>$label)<form method="POST" action="{{ route('allocations.action', $allocation) }}">@csrf<input type="hidden" name="action" value="{{ $action }}"><x-button submit :outline="$action !== 'close'">{{ $label }}</x-button></form>@endforeach</div><p class="muted !text-xs">Ein manueller Abschluss ist jederzeit möglich, auch sobald alle Antworten vorliegen. Nach Ablauf der Frist sind Änderungen durch Eltern gesperrt.</p></x-card></div>
+@endif
+@if(in_array($allocation->status, ['closed', 'proposed']) || $responsesExpired)
+<div class="mb-6"><x-card bordered shadowless>
+    <form method="POST" action="{{ route('allocations.responses.reopen', $allocation) }}">
+        @csrf
+        <h2>Rückmeldungsphase wieder eröffnen</h2>
+        <p class="muted">Bisherige Antworten bleiben erhalten. Gültige persönliche Elternlinks können wieder für Rückmeldungen verwendet werden. Widerrufene oder abgelaufene Links bleiben gesperrt.</p>
+        @if($allocation->status === 'proposed')<p class="mt-3 text-sm text-amber-800">Der aktuelle Vergabevorschlag wird verworfen und muss nach Ende der neuen Rückmeldungsphase neu berechnet werden.</p>@endif
+        <div class="mt-4 flex flex-wrap items-end gap-4">
+            <div><x-input label="Neue Rückmeldefrist (optional)" type="datetime-local" name="response_deadline" value="{{ old('response_deadline', $allocation->response_deadline?->isFuture() ? $allocation->response_deadline->format('Y-m-d\TH:i') : '') }}" /></div>
+            <x-button submit color="gray" outline>Rückmeldungsphase wieder eröffnen</x-button>
+        </div>
+        <p class="muted !text-xs">Eine neue Frist muss in der Zukunft liegen. Ohne Frist schließen Sie die Phase manuell. Alle Uhrzeiten: Europe/Berlin. Es werden keine neuen E-Mails beauftragt; Anfragen können Sie bei Bedarf anschließend selbst versenden.</p>
+    </form>
+    @if($responsesExpired)
+        <form class="mt-4" method="POST" action="{{ route('allocations.action', $allocation) }}">@csrf<input type="hidden" name="action" value="close"><x-button submit color="gray" flat>Geschlossene Rückmeldungen zur Vergabe übernehmen</x-button></form>
+    @endif
+</x-card></div>
 @endif
 <div class="mb-6"><x-card bordered shadowless class="overflow-x-auto"><h2>Ansprüche & Rückmeldungen</h2><p class="muted mb-6">Gespeicherte Anspruchsregeln dieses Verfahrens. Der reguläre Anspruch wird anhand von Wochentag und Kalenderwoche ermittelt. Bis zur verbindlichen Bestätigung können Sie Antworten im Namen der Eltern erfassen oder ändern, auch nach Fristende oder Schließung der Rückmeldungsphase. Diese Änderungen werden mit Ihrem Administratorkonto protokolliert.</p>
 <table class="data-table"><thead><tr><th>Kind</th><th>Regulärer Anspruch</th><th>Regulärer Bedarf</th><th>Nachrückbedarf</th><th>Antwort</th></tr></thead><tbody>
@@ -48,5 +67,64 @@
 @endif
 @if($allocation->status === 'confirmed')<div class="mb-6"><x-card bordered shadowless><h2>Abgeschlossen am {{ $allocation->confirmed_at->format('d.m.Y H:i') }}</h2><p class="muted">Änderungen nach einer verbindlichen Bestätigung erfordern ein neues Verfahren mit eigener Rückmeldung und Bestätigung.</p><details class="mt-5"><summary class="cursor-pointer font-medium text-indigo-800">Neues Verfahren für diesen Tag anlegen</summary><form method="POST" action="{{ route('allocations.restart', $allocation) }}" class="mt-5 grid items-end gap-4 md:grid-cols-2">@csrf<div><x-input label="Neue Kapazität" type="number" min="0" max="10000" name="capacity" required /></div><div><x-input label="Neue Rückmeldefrist (optional)" type="datetime-local" name="response_deadline" /></div><div class="md:col-span-2"><x-textarea label="Geänderte Situation / Begründung" name="reason" required maxlength="2000"></x-textarea></div><x-button submit class="w-fit" >Neues Verfahren eröffnen</x-button></form></details></x-card></div>@endif
 <div class="mb-6"><x-card bordered shadowless><details><summary class="cursor-pointer font-semibold">E-Mail-Versand · {{ $deliveries->whereNotNull('sent_at')->count() }} / {{ $deliveries->count() }} versendet</summary><div class="mt-5 overflow-x-auto"><table class="data-table"><thead><tr><th>Empfänger</th><th>Art</th><th>Versuche</th><th>Status</th></tr></thead><tbody>@forelse($deliveries as $delivery)<tr><td>{{ $delivery->payload['email'] }}</td><td>{{ ['request'=>'Rückmeldungsanfrage','reminder'=>'Erinnerung','result'=>'Ergebnis'][$delivery->kind] }}</td><td>{{ $delivery->attempts }}</td><td>{{ $delivery->sent_at?->format('d.m.Y H:i') ?? ($delivery->last_error ?? 'Zum Versand vorgemerkt') }}<form class="mt-2" method="POST" action="{{ route('mail.resend', $delivery) }}">@csrf<x-button submit flat sm>Erneut versenden</x-button></form></td></tr>@empty<tr><td colspan="4">Noch keine Versandaufträge.</td></tr>@endforelse</tbody></table></div></details></x-card></div>
-<div><x-card bordered shadowless><details><summary class="cursor-pointer font-semibold">Persönliche Elternlinks verwalten</summary><p class="muted mb-4">Jeder Link gilt nur für ein Kind in diesem Verfahren. Widerrufene Links können nicht mehr verwendet werden.</p><div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Kind</th><th>Kontakt</th><th>Gültig bis</th><th>Status</th></tr></thead><tbody>@foreach($tokens as $token)<tr><td>{{ $token->response->child->first_name }}</td><td>{{ $token->parentContact->email }}</td><td>{{ $token->expires_at?->format('d.m.Y') ?? 'Unbegrenzt' }}</td><td>@if($token->revoked_at)Widerrufen @else<form method="POST" action="{{ route('tokens.revoke', $token) }}">@csrf<x-button submit color="red" flat sm>Link widerrufen</x-button></form>@endif</td></tr>@endforeach</tbody></table></div></details></x-card></div>
+<div><x-card bordered shadowless>
+    <details>
+        <summary class="cursor-pointer font-semibold">Persönliche Elternlinks verwalten</summary>
+        <p class="muted mb-4">Jeder Link gilt nur für ein Kind in diesem Verfahren. Widerrufene oder abgelaufene Links können nicht mehr verwendet oder kopiert werden.</p>
+        <div class="overflow-x-auto"><table class="data-table">
+            <thead><tr><th>Kind</th><th>Kontakt</th><th>Gültig bis</th><th>Status</th><th>Aktionen</th></tr></thead>
+            <tbody>
+                @foreach($tokens as $token)
+                    @php($usable = !$token->revoked_at && (!$token->expires_at || $token->expires_at->isFuture()))
+                    <tr>
+                        <td>{{ $token->response->child->first_name }}</td>
+                        <td>{{ $token->parentContact->email }}</td>
+                        <td>{{ $token->expires_at?->format('d.m.Y') ?? 'Unbegrenzt' }}</td>
+                        <td>{{ $token->revoked_at ? 'Widerrufen' : ($usable ? 'Gültig' : 'Abgelaufen') }}</td>
+                        <td>
+                            @if($usable)
+                                <div x-data="{
+                                    copying: false, message: '', failed: false,
+                                    async copyLink() {
+                                        this.copying = true;
+                                        this.message = '';
+                                        this.failed = false;
+                                        try {
+                                            if (!navigator.clipboard?.writeText) {
+                                                this.message = 'Die Zwischenablage ist in diesem Browser nicht verfügbar. Bitte eine sichere HTTPS-Verbindung verwenden.';
+                                                throw new Error();
+                                            }
+                                            const response = await fetch(@js(route('tokens.copy', $token)), { headers: { Accept: 'application/json' }, cache: 'no-store' });
+                                            if (!response.ok) {
+                                                const data = await response.json();
+                                                this.message = [404, 422].includes(response.status) ? data.message : 'Der Link konnte nicht geladen werden. Bitte die Seite neu laden und erneut versuchen.';
+                                                throw new Error();
+                                            }
+                                            const data = await response.json();
+                                            await navigator.clipboard.writeText(data.url);
+                                            this.message = 'Link kopiert.';
+                                        } catch (error) {
+                                            this.failed = true;
+                                            this.message = error.name === 'NotAllowedError' ? 'Kopieren nicht erlaubt. Bitte den Zugriff auf die Zwischenablage erlauben und erneut versuchen.' : (this.message || 'Kopieren fehlgeschlagen. Bitte Verbindung und Zwischenablage prüfen und erneut versuchen.');
+                                        } finally {
+                                            this.copying = false;
+                                        }
+                                    }
+                                }">
+                                    <div class="flex flex-wrap gap-2">
+                                        <x-button type="button" color="gray" outline sm x-on:click="copyLink()" x-bind:disabled="copying" icon="clipboard" text="Link kopieren" />
+                                        <form method="POST" action="{{ route('tokens.revoke', $token) }}">@csrf<x-button submit color="red" flat sm>Link widerrufen</x-button></form>
+                                    </div>
+                                    <p role="status" aria-live="polite" class="mt-2 text-xs" x-bind:class="failed ? 'text-red-600' : 'text-green-700'" x-text="message"></p>
+                                </div>
+                            @elseif(!$token->revoked_at)
+                                <form method="POST" action="{{ route('tokens.revoke', $token) }}">@csrf<x-button submit color="red" flat sm>Link widerrufen</x-button></form>
+                            @endif
+                        </td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table></div>
+    </details>
+</x-card></div>
 @endsection

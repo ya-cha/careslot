@@ -25,6 +25,7 @@ use App\Services\GroupAccessService;
 use App\Services\ParentResponseService;
 use App\Services\WaitingListService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -121,7 +122,12 @@ class CareAdminController extends Controller
             $family = ! empty($data['family_id']) ? Family::whereKey((int) $data['family_id'])->where('group_id', $data['group_id'])->firstOrFail() : Family::create(['name' => $data['family_name'], 'group_id' => $data['group_id']]);
             if (isset($data['contacts'])) {
                 foreach ($data['contacts'] as $contact) {
-                    $family->contacts()->updateOrCreate(['email' => $contact['email']], ['name' => $contact['name']]);
+                    $attributes = ['name' => $contact['name'], 'email' => $contact['email']];
+                    if (! empty($contact['id'])) {
+                        $this->saveContact($family->contacts()->whereKey($contact['id'])->firstOrFail(), $attributes);
+                    } else {
+                        $family->contacts()->create($attributes);
+                    }
                 }
             }
             $attributes = ['group_id' => $data['group_id'], 'kita_year_id' => $year->id, 'family_id' => $family->id, 'first_name' => $data['first_name'], 'last_name' => $data['last_name'], 'active' => $data['active']];
@@ -156,15 +162,25 @@ class CareAdminController extends Controller
         $this->access->authorize($contact->family->group_id);
         $data = $request->validate(['name' => ['required', 'string', 'max:150'], 'email' => ['required', 'email', 'max:255', Rule::unique('parent_contacts')->where('family_id', $contact->family_id)->ignore($contact->id)]]);
         DB::transaction(function () use ($contact, $data): void {
-            $before = $contact->only('name', 'email');
-            $contact->update($data);
-            if ($before['email'] !== $data['email']) {
-                PersonalAccessToken::where('parent_contact_id', $contact->id)->whereNull('revoked_at')->update(['revoked_at' => now()]);
-            }
-            $this->audit->record('contact.updated', $contact, ['before' => $before, 'after' => $data]);
+            $this->saveContact($contact, $data);
         });
 
         return back()->with('success', 'Elternkontakt aktualisiert.');
+    }
+
+    /** @param array{name: string, email: string} $data */
+    private function saveContact(ParentContact $contact, array $data): void
+    {
+        $before = $contact->only('name', 'email');
+        $contact->fill($data);
+        if (! $contact->isDirty()) {
+            return;
+        }
+        $contact->save();
+        if ($before['email'] !== $data['email']) {
+            PersonalAccessToken::where('parent_contact_id', $contact->id)->whereNull('revoked_at')->update(['revoked_at' => now()]);
+        }
+        $this->audit->record('contact.updated', $contact, ['before' => $before, 'after' => $data]);
     }
 
     public function newDay(): View
@@ -209,6 +225,15 @@ class CareAdminController extends Controller
         return back()->with('success', 'Rückmeldefrist gespeichert. Bestehende Rückmeldungen bleiben erhalten.');
     }
 
+    public function reopenResponses(Request $request, EmergencyAllocation $allocation): RedirectResponse
+    {
+        Gate::authorize('update', $allocation);
+        $data = $request->validate(['response_deadline' => ['present', 'nullable', 'date', 'after:now']], ['response_deadline.after' => 'Die Rückmeldefrist muss in der Zukunft liegen.']);
+        $this->allocations->reopenResponses($allocation, $data['response_deadline'], $request->user());
+
+        return back()->with('success', 'Rückmeldungsphase wieder eröffnet. Bisherige Antworten bleiben erhalten. Es wurden keine neuen E-Mails beauftragt.');
+    }
+
     public function action(Request $request, EmergencyAllocation $allocation): RedirectResponse
     {
         Gate::authorize('update', $allocation);
@@ -245,6 +270,24 @@ class CareAdminController extends Controller
         });
 
         return back()->with('success', 'Persönlicher Link widerrufen.');
+    }
+
+    public function copyLink(PersonalAccessToken $token): JsonResponse
+    {
+        Gate::authorize('update', $token->response->allocation);
+        abort_if($token->revoked_at || ($token->expires_at && $token->expires_at->lte(now())), 422, 'Dieser Link ist widerrufen oder abgelaufen.');
+
+        $deliveries = EmailDelivery::where('emergency_allocation_id', $token->response->emergency_allocation_id)
+            ->where('parent_contact_id', $token->parent_contact_id)->latest('id')->cursor();
+        foreach ($deliveries as $delivery) {
+            $plainToken = $delivery->payload['token'] ?? null;
+            if (is_string($plainToken) && hash_equals($token->token_hash, hash('sha256', $plainToken))) {
+                return response()->json(['url' => route('parent.show', $plainToken)])
+                    ->header('Cache-Control', 'no-store, private')->header('Referrer-Policy', 'no-referrer');
+            }
+        }
+
+        abort(404, 'Der ursprüngliche Link ist nicht mehr verfügbar. Bitte eine neue Rückmeldungsanfrage versenden.');
     }
 
     public function resend(EmailDelivery $delivery): RedirectResponse

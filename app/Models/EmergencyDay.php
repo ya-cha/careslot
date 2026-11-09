@@ -18,6 +18,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property Collection<int, EmergencyAllocation> $allocations
  * @property CarbonImmutable $date
  * @property int $capacity
+ * @property string|null $starts_at
+ * @property string|null $ends_at
  */
 #[Fillable(['group_id', 'kita_year_id', 'date', 'capacity', 'starts_at', 'ends_at', 'status'])]
 class EmergencyDay extends Model
@@ -29,6 +31,19 @@ class EmergencyDay extends Model
     protected function casts(): array
     {
         return ['date' => 'immutable_date', 'capacity' => 'integer'];
+    }
+
+    public function careTimeLabel(): string
+    {
+        $start = $this->starts_at ? substr($this->starts_at, 0, 5) : null;
+        $end = $this->ends_at ? substr($this->ends_at, 0, 5) : null;
+
+        return match (true) {
+            $start !== null && $end !== null => 'Notbetreuung von '.$start.' bis '.$end.' Uhr',
+            $start !== null => 'Notbetreuung ab '.$start.' Uhr',
+            $end !== null => 'Notbetreuung bis '.$end.' Uhr',
+            default => 'Ganztägige Notbetreuung',
+        };
     }
 
     /** @return BelongsTo<KitaYear, $this> */

@@ -10,7 +10,7 @@ use App\Services\EmergencyAllocationService;
 use App\Services\WaitingListService;
 use Livewire\Livewire;
 
-it('lets group administrators reorder their list regardless of the procedure or year status', function (string $status) {
+it('lets group administrators reorder their list regardless of the procedure or year status', function (string $status, bool $drag) {
     [$year, $children, $allocation] = careScenario(['never', 'never', 'never']);
     $admin = User::factory()->administrator()->for($children[0]->group, 'group')->create();
     $service = app(EmergencyAllocationService::class);
@@ -29,10 +29,14 @@ it('lets group administrators reorder their list regardless of the procedure or 
     $entry = $children[0]->waitingListEntry;
     $this->actingAs($admin);
 
-    Livewire::test('waiting-list')->assertSee('Position ändern')
-        ->call('editPosition', $entry->id)->assertSet('position', '1')
-        ->set('position', '3')->call('savePosition')->assertHasNoErrors()
-        ->assertSet('editingEntryId', null)->assertSee('Reihenfolge gespeichert.');
+    $component = Livewire::test('waiting-list')->assertDontSee('>Position ändern<', false);
+    if ($drag) {
+        $component->call('sortEntry', $entry->id, 2);
+    } else {
+        $component->call('editPosition', $entry->id)->assertSet('position', '1')
+            ->set('position', '3')->call('savePosition');
+    }
+    $component->assertHasNoErrors()->assertSet('editingEntryId', null)->assertSee('Reihenfolge gespeichert.');
 
     expect($year->waitingListEntries()->orderBy('position')->pluck('child_id')->all())->toBe([$children[1]->id, $children[2]->id, $children[0]->id]);
     expect($list->fresh()->revision)->toBe($revision + 1);
@@ -42,7 +46,7 @@ it('lets group administrators reorder their list regardless of the procedure or 
     expect($audit->data['before'])->toBe([$children[0]->id => 1, $children[1]->id => 2, $children[2]->id => 3]);
     expect($audit->data['after'])->toBe([$children[1]->id => 1, $children[2]->id => 2, $children[0]->id => 3]);
     $this->assertDatabaseCount('waiting_list_movements', 0);
-})->with(['responses', 'closed', 'confirmed', 'archived']);
+})->with(['responses', 'closed', 'confirmed', 'archived'])->with(['manual' => false, 'drag' => true]);
 
 it('lets global administrators edit each group independently', function () {
     [$year, $children] = careScenario(['never', 'never']);
@@ -149,14 +153,20 @@ it('cancels pending changes when selecting another group or year', function (str
     $this->assertDatabaseMissing('audit_logs', ['event' => 'waiting_list.reordered']);
 })->with(['groupId', 'yearId']);
 
-it('rejects confirmation of a proposal calculated before a manual reorder', function () {
+it('rejects confirmation of a proposal calculated before a reorder', function (bool $drag) {
     [$year, $children, $allocation] = careScenario(['never', 'never', 'never']);
     $allocation->responses()->update(['waiting_needed' => true]);
     $service = app(EmergencyAllocationService::class);
     $service->close($allocation);
     $service->propose($allocation);
     $this->actingAs(User::factory()->administrator()->for($children[0]->group, 'group')->create());
-    Livewire::test('waiting-list')->call('editPosition', $children[2]->waitingListEntry->id)->set('position', '1')->call('savePosition')->assertHasNoErrors();
+    $component = Livewire::test('waiting-list');
+    if ($drag) {
+        $component->call('sortEntry', $children[2]->waitingListEntry->id, 0);
+    } else {
+        $component->call('editPosition', $children[2]->waitingListEntry->id)->set('position', '1')->call('savePosition');
+    }
+    $component->assertHasNoErrors();
 
     $this->post(route('allocations.action', $allocation), ['action' => 'confirm', 'confirmation' => 1, 'proposal_hash' => $allocation->fresh()->proposalHash()])
         ->assertSessionHasErrors(['allocation' => 'Stammdaten oder Warteliste haben sich geändert. Vorschlag verwerfen und neu berechnen.']);
@@ -166,7 +176,7 @@ it('rejects confirmation of a proposal calculated before a manual reorder', func
     $service->discard($allocation);
     $proposal = $service->propose($allocation);
     expect(collect($proposal['rows'])->where('awarded', true)->pluck('child_id')->all())->toBe([$children[2]->id]);
-});
+})->with(['manual' => false, 'drag' => true]);
 
 it('renumbers gaps when moving an entry and preserves every child', function () {
     [$year, $children] = careScenario(['never', 'never', 'never']);

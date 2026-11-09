@@ -22,6 +22,9 @@ class CareMessage extends Notification
         $message = (new MailMessage)->subject($result ? 'Verbindliches Ergebnis der Notbetreuung' : 'Rückmeldung zur Notbetreuung')
             ->greeting('Liebe Familie,')->line('Notbetreuung am '.$this->payload['date'].' für '.$this->payload['child_name'].'.');
         $message->line($result ? ($this->payload['awarded'] ? 'Der Elternbeirat hat einen Betreuungsplatz verbindlich bestätigt.' : 'In diesem Verfahren wurde kein Betreuungsplatz vergeben.') : 'Bitte teilen Sie uns Ihren Betreuungsbedarf mit. Ohne Rückmeldung bleibt ein regulärer Anspruch bestehen.');
+        if (isset($this->payload['care_time'])) {
+            $message->line($this->payload['care_time'].'.');
+        }
         if (! $result && $this->payload['deadline']) {
             $message->line('Rückmeldefrist: '.$this->payload['deadline'].' (Europe/Berlin).');
         }

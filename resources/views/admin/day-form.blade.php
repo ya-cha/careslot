@@ -15,17 +15,21 @@
                 <x-select.native label="Kita-Jahr" aria-label="Kita-Jahr" name="kita_year_id" required>
                     @foreach($years as $year)<option value="{{ $year->id }}" @selected(old('kita_year_id') == $year->id)>{{ $year->name }}</option>@endforeach
                 </x-select.native>
+            </div>
+            <div class="grid gap-5 sm:grid-cols-3">
                 <x-input label="Datum" type="date" name="date" :value="old('date')" required />
+                <x-input label="Betreuungsbeginn (optional)" type="time" name="starts_at" :value="old('starts_at')" />
+                <x-input label="Betreuungsende (optional)" type="time" name="ends_at" :value="old('ends_at')" />
+            </div>
+            <p class="text-xs text-gray-500">Beginn und Ende können unabhängig voneinander leer bleiben. Ohne beide Uhrzeiten gilt die Notbetreuung ganztägig. Alle Uhrzeiten: Europe/Berlin.</p>
+            <div>
                 <x-input label="Verfügbare Plätze" type="number" min="0" max="10000" name="capacity" :value="old('capacity')" required />
             </div>
             <div class="border-t border-gray-100 pt-6">
-                <h2 class="mb-4">Zeiten & Rückmeldefrist</h2>
+                <h2 class="mb-4">Rückmeldefrist</h2>
                 <div class="grid gap-5 sm:grid-cols-2">
                     <div class="sm:col-span-2"><x-input label="Rückmeldefrist (optional)" type="datetime-local" name="response_deadline" :value="old('response_deadline')" hint="Ohne Frist schließen Sie die Rückmeldungsphase manuell." /></div>
-                    <x-input label="Betreuungsbeginn (optional)" type="time" name="starts_at" :value="old('starts_at')" />
-                    <x-input label="Betreuungsende (optional)" type="time" name="ends_at" :value="old('ends_at')" />
                 </div>
-                <p class="mt-3 text-xs text-gray-500">Alle Uhrzeiten: Europe/Berlin.</p>
             </div>
             <div class="form-actions"><x-button :href="route('dashboard')" color="gray" flat text="Abbrechen" /><x-button submit text="Rückmeldungsphase eröffnen" icon="arrow-right" position="right" /></div>
         </form>

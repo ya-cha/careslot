@@ -44,6 +44,9 @@
                     <x-side-bar.item text="Gruppen & Admins" icon="building-office-2" :route="route('groups.index')" :current="request()->routeIs('groups.*', 'users.*')" />
                 @endcan
                 <x-side-bar.item text="Historie" icon="clock" :route="route('history')" :current="request()->routeIs('history')" />
+                @can('view-mail-logs')
+                    <x-side-bar.item text="E-Mail-Log" icon="envelope" :route="route('mail-logs.index')" :current="request()->routeIs('mail-logs.*')" />
+                @endcan
                 <x-slot:footer>
                     <div class="flex items-center gap-3 px-3 py-2">
                         <span class="grid size-9 shrink-0 place-items-center rounded-full bg-indigo-50 text-xs font-semibold text-indigo-700">{{ auth()->user()->initials() }}</span>
